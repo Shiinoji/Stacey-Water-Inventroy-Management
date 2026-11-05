@@ -8,6 +8,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Download,
   Droplets,
   Filter,
   LayoutDashboard,
@@ -124,7 +125,6 @@ const navItems = [
   { id: "Dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "Transactions", label: "Transactions", icon: ArrowDownRight },
   { id: "Sales", label: "Sales", icon: Wallet },
-  { id: "Settings", label: "Settings", icon: Settings },
 ];
 
 const formatMoney = (value, currency = "PHP") =>
@@ -253,6 +253,35 @@ function App() {
     }
   };
 
+  const exportWorkspaceData = () => {
+    try {
+      const backup = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        businessSettings: settings,
+        employees,
+        containers,
+        deliveryAreas: areas,
+        transactionHistory: transactions,
+        pendingDeliveries: pendingTransactions,
+      };
+      const file = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(file);
+      const link = document.createElement("a");
+      const safeBusinessName = settings.businessName.trim().replace(/[^a-z0-9_-]+/gi, "-") || "workspace";
+      link.href = url;
+      link.download = `${safeBusinessName}-backup-${localInputDate()}.json`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      notify("Workspace backup downloaded");
+    } catch (error) {
+      console.error("Unable to export workspace data.", error);
+      notify("Workspace backup could not be downloaded. Please try again.");
+    }
+  };
+
   const resetWorkspaceData = () => {
     try {
       const emptyList = JSON.stringify([]);
@@ -331,12 +360,15 @@ function App() {
           {navItems.map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => handleNav(id)} className={`nav-link ${page === id ? "nav-active" : ""}`}>
               <Icon size={18} strokeWidth={1.8} /><span>{label}</span>
-              {id === "Transactions" && <span className="nav-count">{pendingTransactions.length}</span>}
+              {id === "Transactions" && pendingTransactions.length > 0 && <span className="nav-count">{pendingTransactions.length}</span>}
             </button>
           ))}
         </nav>
         <button onClick={() => { setPage("Master data"); setMasterSection("Employees"); setSidebarOpen(false); }} className={`nav-link ${page === "Master data" ? "nav-active" : ""}`}>
           <Settings2 size={18} strokeWidth={1.8} /><span>Master data</span>
+        </button>
+        <button onClick={() => handleNav("Settings")} className={`nav-link ${page === "Settings" ? "nav-active" : ""}`}>
+          <Settings size={18} strokeWidth={1.8} /><span>Settings</span>
         </button>
       </aside>
 
@@ -391,7 +423,7 @@ function App() {
             setAreas={setAreas}
             notify={notify}
           />}
-          {page === "Settings" && <SettingsPage settings={settings} onSave={saveSettings} onResetData={resetWorkspaceData} />}
+          {page === "Settings" && <SettingsPage settings={settings} onSave={saveSettings} onResetData={resetWorkspaceData} onExportData={exportWorkspaceData} />}
         </div>
       </main>
 
@@ -508,9 +540,7 @@ function DeliveryConfirmationPage({ transaction, dateFormat, currency, onBack, o
 
   return (
     <section className="delivery-confirmation-page">
-      <PageHeading eyebrow="DELIVERY COMPLETION" title="Confirm successful delivery" description="Review this transaction and enter the final container counts.">
-        <Button type="button" variant="secondary" onClick={onBack}>Back to transactions</Button>
-      </PageHeading>
+      <PageHeading eyebrow="DELIVERY COMPLETION" title="Confirm successful delivery" description="Review this transaction and enter the final container counts." />
       <form className="panel delivery-confirmation-panel" onSubmit={submit}>
         <div className="delivery-confirmation-heading">
           <div><span className="eyebrow">CURRENT TRANSACTION</span><h2>{transaction.id}</h2></div>
@@ -560,7 +590,7 @@ function DeliveryConfirmationPage({ transaction, dateFormat, currency, onBack, o
   );
 }
 
-function SettingsPage({ settings, onSave, onResetData }) {
+function SettingsPage({ settings, onSave, onResetData, onExportData }) {
   const [form, setForm] = useState(settings);
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   const submit = (event) => {
@@ -634,6 +664,13 @@ function SettingsPage({ settings, onSave, onResetData }) {
       </section>
       <section className="panel settings-section reset-section">
         <div className="settings-section-heading">
+          <h2>Backup workspace data</h2>
+          <p>Download your settings, inventory lists, pending deliveries, and transaction history as a JSON file.</p>
+        </div>
+        <button type="button" className="button button-secondary" onClick={onExportData}><Download size={16} /> Download backup</button>
+      </section>
+      <section className="panel settings-section reset-section">
+        <div className="settings-section-heading">
           <h2>Reset workspace data</h2>
           <p>Permanently delete all records and restore settings to their defaults.</p>
         </div>
@@ -665,7 +702,7 @@ function TransactionTable({ transactions, compact = false, dateFormat, onComplet
               <td>{item.returned}</td>
               <td>{item.damaged ? <span className="number-alert">{item.damaged}</span> : <span className="muted">—</span>}</td>
               <td>{item.lost ? <span className="number-alert">{item.lost}</span> : <span className="muted">—</span>}</td>
-              {onComplete && <td><button type="button" className="button button-secondary pending-complete" onClick={() => onComplete(item)}>Confirm delivery</button></td>}
+              {onComplete && <td><button type="button" className="button button-primary pending-complete" onClick={() => onComplete(item)}>Confirm delivery</button></td>}
             </tr>;
           })}
         </tbody>

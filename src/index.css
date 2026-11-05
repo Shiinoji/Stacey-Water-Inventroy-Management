@@ -127,14 +127,7 @@ select:focus-visible {
 .nav-count {
   margin-left: auto;
   font-size: 10px;
-  padding: 3px 7px;
   color: #c2d0d8;
-  border-radius: 20px;
-  background: #375465;
-}
-.nav-active .nav-count {
-  background: #c3d6e1;
-  color: #345d75;
 }
 .main-area {
   min-height: 100vh;
