@@ -421,17 +421,10 @@ h1 {
 .status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
   padding: 5px 8px;
   border-radius: 20px;
   font-size: 9px;
   font-weight: 600;
-}
-.status-pill > span {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: currentColor;
 }
 .status-green {
   color: #477692;
@@ -844,6 +837,20 @@ h1 {
 }
 .master-list-row:last-child {
   border-bottom: 0;
+}
+.delete-button {
+  flex: 0 0 34px;
+  color: #a45b54;
+}
+.delete-button:hover {
+  color: #a33f35;
+  background: #faeeec;
+}
+.master-list-empty {
+  margin: 0;
+  padding: 18px 0 4px;
+  color: #92989b;
+  font-size: 11px;
 }
 .master-person-name {
   min-width: 0;

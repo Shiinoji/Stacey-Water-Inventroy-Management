@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDownLeft,
   ArrowDownRight,
@@ -19,6 +19,7 @@ import {
   Settings,
   Settings2,
   ShoppingBag,
+  Trash2,
   Users,
   Wallet,
   X,
@@ -102,6 +103,22 @@ function loadSettings() {
   }
 }
 
+function loadMasterData(key, initialData) {
+  try {
+    const saved = window.localStorage.getItem(`stacey-water-${key}`);
+    if (!saved) return initialData;
+
+    const parsed = JSON.parse(saved);
+    if (!Array.isArray(parsed)) {
+      throw new Error(`Saved ${key} data is not a list.`);
+    }
+    return parsed;
+  } catch (error) {
+    console.error(`Unable to load saved ${key} data.`, error);
+    return initialData;
+  }
+}
+
 // Shared navigation and currency helpers keep labels and totals consistent.
 const navItems = [
   { id: "Dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -147,7 +164,7 @@ function Avatar({ name, size = "" }) {
 }
 
 function StatusPill({ children, kind = "green" }) {
-  return <span className={`status-pill status-${kind}`}><span />{children}</span>;
+  return <span className={`status-pill status-${kind}`}>{children}</span>;
 }
 
 function EmptyState({ icon: Icon, title, text, action }) {
@@ -166,9 +183,9 @@ function App() {
   const [page, setPage] = useState("Dashboard");
   const [masterSection, setMasterSection] = useState("Employees");
   const [transactions, setTransactions] = useState(initialTransactions);
-  const [employees, setEmployees] = useState(initialEmployees);
-  const [containers, setContainers] = useState(initialContainers);
-  const [areas, setAreas] = useState(initialAreas);
+  const [employees, setEmployees] = useState(() => loadMasterData("employees", initialEmployees));
+  const [containers, setContainers] = useState(() => loadMasterData("containers", initialContainers));
+  const [areas, setAreas] = useState(() => loadMasterData("areas", initialAreas));
   const [settings, setSettings] = useState(loadSettings);
   const [showTransaction, setShowTransaction] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -177,9 +194,30 @@ function App() {
   const [appliedFilters, setAppliedFilters] = useState({ employee: "All employees", area: "All areas", container: "All containers" });
   const [toast, setToast] = useState("");
 
-  const totalIssued = transactions.reduce((sum, item) => sum + item.issued, 0);
-  const totalReturned = transactions.reduce((sum, item) => sum + item.returned, 0);
-  const totalSales = transactions.reduce((sum, item) => sum + (item.issued - item.returned) * item.unitPrice, 0);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("stacey-water-employees", JSON.stringify(employees));
+      window.localStorage.setItem("stacey-water-containers", JSON.stringify(containers));
+      window.localStorage.setItem("stacey-water-areas", JSON.stringify(areas));
+    } catch (error) {
+      console.error("Unable to save master data.", error);
+    }
+  }, [employees, containers, areas]);
+
+  const activeTransactions = useMemo(() => {
+    const employeeNames = new Set(employees.map((employee) => `${employee.first} ${employee.last}`));
+    const areaNames = new Set(areas.map((area) => area.name));
+    const containerTypes = new Set(containers.map((container) => container.type));
+    return transactions.filter((item) => (
+      employeeNames.has(item.employee) &&
+      areaNames.has(item.area) &&
+      containerTypes.has(item.container)
+    ));
+  }, [transactions, employees, areas, containers]);
+
+  const totalIssued = activeTransactions.reduce((sum, item) => sum + item.issued, 0);
+  const totalReturned = activeTransactions.reduce((sum, item) => sum + item.returned, 0);
+  const totalSales = activeTransactions.reduce((sum, item) => sum + (item.issued - item.returned) * item.unitPrice, 0);
 
   // Search is immediate; the selected dropdown filters apply on user action.
   const filteredTransactions = useMemo(() => transactions.filter((item) => {
@@ -259,9 +297,10 @@ function App() {
         </header>
 
         <div className="page-content">
-          {page === "Dashboard" && <DashboardPage transactions={transactions} totalIssued={totalIssued} totalReturned={totalReturned} totalSales={totalSales} currency={settings.currency} dateFormat={settings.dateFormat} openNewTransaction={openNewTransaction} setPage={setPage} />}
+          {page === "Dashboard" && <DashboardPage transactions={activeTransactions} totalIssued={totalIssued} totalReturned={totalReturned} totalSales={totalSales} currency={settings.currency} dateFormat={settings.dateFormat} setPage={setPage} />}
           {page === "Transactions" && <TransactionsPage
             transactions={filteredTransactions}
+            allTransactions={transactions}
             totalCount={transactions.length}
             employees={employees}
             areas={areas}
@@ -274,7 +313,7 @@ function App() {
             openNewTransaction={openNewTransaction}
             dateFormat={settings.dateFormat}
           />}
-          {page === "Sales" && <SalesPage transactions={transactions} currency={settings.currency} dateFormat={settings.dateFormat} openNewTransaction={openNewTransaction} />}
+          {page === "Sales" && <SalesPage transactions={activeTransactions} currency={settings.currency} dateFormat={settings.dateFormat} openNewTransaction={openNewTransaction} />}
           {page === "Master data" && <MasterDataPage
             section={masterSection}
             setSection={setMasterSection}
@@ -316,12 +355,10 @@ function PageHeading({ eyebrow, title, description, children }) {
 }
 
 // The dashboard highlights current totals and recent transaction activity.
-function DashboardPage({ transactions, totalIssued, totalReturned, totalSales, currency, dateFormat, openNewTransaction, setPage }) {
+function DashboardPage({ transactions, totalIssued, totalReturned, totalSales, currency, dateFormat, setPage }) {
   return (
     <>
-      <PageHeading eyebrow={formatDate(new Date(), dateFormat).toUpperCase()} title="Dashboard" description="A clear snapshot of your inventory and delivery activity.">
-        <Button onClick={openNewTransaction}><Plus size={17} /> New transaction</Button>
-      </PageHeading>
+      <PageHeading eyebrow={formatDate(new Date(), dateFormat).toUpperCase()} title="Dashboard" description="A clear snapshot of your inventory and delivery activity." />
 
       <section className="metrics-grid">
         <MetricCard label="Containers issued" value={totalIssued} icon={Package} tone="blue" />
@@ -342,7 +379,10 @@ function DashboardPage({ transactions, totalIssued, totalReturned, totalSales, c
 }
 
 // Provides transaction search, staged filters, and an empty state when nothing matches.
-function TransactionsPage({ transactions, totalCount, employees, areas, containers, filters, setFilters, setAppliedFilters, search, setSearch, openNewTransaction, dateFormat }) {
+function TransactionsPage({ transactions, allTransactions, totalCount, employees, areas, containers, filters, setFilters, setAppliedFilters, search, setSearch, openNewTransaction, dateFormat }) {
+  const employeeOptions = [...new Set([...employees.map((employee) => `${employee.first} ${employee.last}`), ...allTransactions.map((item) => item.employee)])];
+  const areaOptions = [...new Set([...areas.map((area) => area.name), ...allTransactions.map((item) => item.area)])];
+  const containerOptions = [...new Set([...containers.map((item) => item.type), ...allTransactions.map((item) => item.container)])];
   return (
     <>
       <PageHeading eyebrow="INVENTORY MOVEMENT" title="Transactions" description="Track every container as it moves through your business.">
@@ -350,9 +390,9 @@ function TransactionsPage({ transactions, totalCount, employees, areas, containe
       </PageHeading>
       <section className="filter-toolbar">
         <div className="search-field"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search transactions..." /></div>
-        <label className="filter-select"><select value={filters.employee} onChange={(event) => setFilters({ ...filters, employee: event.target.value })}><option>All employees</option>{employees.map((employee) => <option key={employee.id}>{employee.first} {employee.last}</option>)}</select><ChevronDown size={15} /></label>
-        <label className="filter-select"><select value={filters.area} onChange={(event) => setFilters({ ...filters, area: event.target.value })}><option>All areas</option>{areas.map((area) => <option key={area.id}>{area.name}</option>)}</select><ChevronDown size={15} /></label>
-        <label className="filter-select"><select value={filters.container} onChange={(event) => setFilters({ ...filters, container: event.target.value })}><option>All containers</option>{[...new Set(containers.map((item) => item.type))].map((type) => <option key={type}>{type}</option>)}</select><ChevronDown size={15} /></label>
+        <label className="filter-select"><select value={filters.employee} onChange={(event) => setFilters({ ...filters, employee: event.target.value })}><option>All employees</option>{employeeOptions.map((name) => <option key={name}>{name}</option>)}</select><ChevronDown size={15} /></label>
+        <label className="filter-select"><select value={filters.area} onChange={(event) => setFilters({ ...filters, area: event.target.value })}><option>All areas</option>{areaOptions.map((name) => <option key={name}>{name}</option>)}</select><ChevronDown size={15} /></label>
+        <label className="filter-select"><select value={filters.container} onChange={(event) => setFilters({ ...filters, container: event.target.value })}><option>All containers</option>{containerOptions.map((type) => <option key={type}>{type}</option>)}</select><ChevronDown size={15} /></label>
         <Button variant="secondary" className="filter-button" onClick={() => setAppliedFilters(filters)}><Filter size={15} /> Filter</Button>
       </section>
       <div className="result-caption"><strong>{transactions.length}</strong> matching transactions</div>
@@ -449,7 +489,7 @@ function TransactionTable({ transactions, compact = false, dateFormat }) {
             if (compact) return <tr key={item.id}>
               <td><span className="table-id">{item.id}</span></td>
               <td><span className="person-cell"><Avatar name={item.employee} size="avatar-small" /><span>{item.employee}</span></span></td>
-              <td>{item.area}</td><td>{formatDate(item.date, dateFormat)}</td><td><strong>{item.issued}</strong> <span className="muted">containers</span></td>
+              <td>{item.area}</td><td>{formatDate(item.date, dateFormat)}</td><td><strong>{item.issued}</strong></td>
               <td><StatusPill kind={isReturned ? "green" : "amber"}>{isReturned ? "Returned" : "In transit"}</StatusPill></td>
             </tr>;
             return <tr key={item.id}>
@@ -511,7 +551,7 @@ function MasterDataPage({ section, setSection, employees, setEmployees, containe
         const count = item === "Employees" ? employees.length : item === "Containers" ? containers.length : areas.length;
         return <button key={item} className={`master-tab ${section === item ? "master-tab-active" : ""}`} onClick={() => setSection(item)}><Icon size={17} />{item}<span>{count}</span></button>;
       })}</div>
-      {section === "Employees" && <EmployeesMaster employees={employees} setEmployees={setEmployees} notify={notify} />}
+      {section === "Employees" && <EmployeesMaster employees={employees} setEmployees={setEmployees} setAreas={setAreas} notify={notify} />}
       {section === "Containers" && <ContainersMaster containers={containers} setContainers={setContainers} currency={currency} defaultOwnership={defaultOwnership} notify={notify} />}
       {section === "Delivery areas" && <AreasMaster areas={areas} setAreas={setAreas} employees={employees} notify={notify} />}
     </>
@@ -519,7 +559,7 @@ function MasterDataPage({ section, setSection, employees, setEmployees, containe
 }
 
 // Each master form keeps its draft local and commits a validated record on submit.
-function EmployeesMaster({ employees, setEmployees, notify }) {
+function EmployeesMaster({ employees, setEmployees, setAreas, notify }) {
   const [form, setForm] = useState({ first: "", last: "", phone: "" });
   const submit = (event) => {
     event.preventDefault();
@@ -528,11 +568,23 @@ function EmployeesMaster({ employees, setEmployees, notify }) {
     setForm({ first: "", last: "", phone: "" });
     notify("Employee added successfully");
   };
+  const removeEmployee = (person) => {
+    const name = `${person.first} ${person.last}`;
+    if (!window.confirm(`Delete ${name}? Existing transactions will be kept.`)) return;
+    const remainingEmployees = employees.filter((item) => item.id !== person.id);
+    setEmployees(remainingEmployees);
+    setAreas((current) => current.map((area) => (
+      area.employee === name && !remainingEmployees.some((item) => `${item.first} ${item.last}` === name)
+        ? { ...area, employee: "Not assigned" }
+        : area
+    )));
+    notify("Employee deleted successfully");
+  };
   return <section className="master-content">
     <div className="master-intro"><span className="master-intro-icon people-intro"><Users size={19} /></span><div><h2>Employees</h2><p>People who make every delivery possible.</p></div></div>
     <div className="master-columns">
       <form className="panel form-panel" onSubmit={submit}><div className="form-panel-title"><h3>Add an employee</h3></div><label>First name<input value={form.first} onChange={(event) => setForm({ ...form, first: event.target.value })} placeholder="e.g. Jamie" required /></label><label>Last name<input value={form.last} onChange={(event) => setForm({ ...form, last: event.target.value })} placeholder="e.g. Rivera" required /></label><label>Contact number <span className="optional">(optional)</span><input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="+63 9XX XXX XXXX" /></label><Button type="submit"><Plus size={16} /> Add employee</Button></form>
-      <div className="panel master-list-panel"><div className="list-panel-heading"><div><h3>Your team</h3><p>Manage your delivery staff</p></div><span className="list-count">{employees.length}</span></div><div className="master-list">{employees.map((person) => <div className="master-list-row" key={person.id}><Avatar name={`${person.first} ${person.last}`} /><span className="master-person-name"><strong>{person.first} {person.last}</strong><small>{person.phone || "No contact number"}</small></span></div>)}</div></div>
+      <div className="panel master-list-panel"><div className="list-panel-heading"><div><h3>Your team</h3><p>Manage your delivery staff</p></div><span className="list-count">{employees.length}</span></div><div className="master-list">{employees.length ? employees.map((person) => <div className="master-list-row" key={person.id}><Avatar name={`${person.first} ${person.last}`} /><span className="master-person-name"><strong>{person.first} {person.last}</strong><small>{person.phone || "No contact number"}</small></span><button type="button" className="icon-button delete-button" aria-label={`Delete ${person.first} ${person.last}`} title="Delete employee" onClick={() => removeEmployee(person)}><Trash2 size={16} /></button></div>) : <p className="master-list-empty">No employees added yet.</p>}</div></div>
     </div>
   </section>;
 }
@@ -547,11 +599,16 @@ function ContainersMaster({ containers, setContainers, currency, defaultOwnershi
     setForm(initialForm);
     notify("Container added successfully");
   };
+  const removeContainer = (item) => {
+    if (!window.confirm(`Delete ${item.type} (${item.ownership})? Existing transactions will be kept.`)) return;
+    setContainers((current) => current.filter((container) => container.id !== item.id));
+    notify("Container deleted successfully");
+  };
   return <section className="master-content">
     <div className="master-intro"><span className="master-intro-icon container-intro"><Boxes size={19} /></span><div><h2>Containers</h2><p>Keep track of every container type and its value.</p></div></div>
     <div className="master-columns">
       <form className="panel form-panel" onSubmit={submit}><div className="form-panel-title"><h3>Add a container</h3></div><label>Container type<input value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })} placeholder="e.g. 5-gallon jug" required /></label><label>Ownership type<select value={form.ownership} onChange={(event) => setForm({ ...form, ownership: event.target.value })}><option>Company-owned</option><option>Customer-owned</option></select></label><div className="form-two-col"><label>Status<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}><option>Active</option><option>Inactive</option></select></label><label>Unit price<input type="number" min="0" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} placeholder="₱ 0.00" required /></label></div><Button type="submit"><Plus size={16} /> Add container</Button></form>
-      <div className="panel master-list-panel"><div className="list-panel-heading"><div><h3>Container types</h3><p>Pricing and availability</p></div><span className="list-count">{containers.length}</span></div><div className="master-list">{containers.map((item) => <div className="master-list-row container-list-row" key={item.id}><span className="container-list-icon"><Package size={18} /></span><span className="master-person-name"><strong>{item.type}</strong><small>{item.ownership} · {formatMoney(item.price, currency)} / unit</small></span><StatusPill kind={item.status === "Active" ? "green" : "gray"}>{item.status}</StatusPill></div>)}</div></div>
+      <div className="panel master-list-panel"><div className="list-panel-heading"><div><h3>Container types</h3><p>Pricing and availability</p></div><span className="list-count">{containers.length}</span></div><div className="master-list">{containers.length ? containers.map((item) => <div className="master-list-row container-list-row" key={item.id}><span className="container-list-icon"><Package size={18} /></span><span className="master-person-name"><strong>{item.type}</strong><small>{item.ownership} · {formatMoney(item.price, currency)} / unit</small></span><StatusPill kind={item.status === "Active" ? "green" : "gray"}>{item.status}</StatusPill><button type="button" className="icon-button delete-button" aria-label={`Delete ${item.type} (${item.ownership})`} title="Delete container type" onClick={() => removeContainer(item)}><Trash2 size={16} /></button></div>) : <p className="master-list-empty">No container types added yet.</p>}</div></div>
     </div>
   </section>;
 }
@@ -565,11 +622,16 @@ function AreasMaster({ areas, setAreas, employees, notify }) {
     setForm({ name: "", barangay: "", employee: "" });
     notify("Delivery area added successfully");
   };
+  const removeArea = (area) => {
+    if (!window.confirm(`Delete the ${area.name} delivery area? Existing transactions will be kept.`)) return;
+    setAreas((current) => current.filter((item) => item.id !== area.id));
+    notify("Delivery area deleted successfully");
+  };
   return <section className="master-content">
     <div className="master-intro"><span className="master-intro-icon area-intro"><MapPin size={19} /></span><div><h2>Delivery areas</h2><p>Organize your routes by neighborhood and barangay.</p></div></div>
     <div className="master-columns">
       <form className="panel form-panel" onSubmit={submit}><div className="form-panel-title"><h3>Add a delivery area</h3></div><label>Area name<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="e.g. Riverside" required /></label><label>Barangay<input value={form.barangay} onChange={(event) => setForm({ ...form, barangay: event.target.value })} placeholder="e.g. San Isidro" required /></label><label>Assigned employee <span className="optional">(optional)</span><select value={form.employee} onChange={(event) => setForm({ ...form, employee: event.target.value })}><option value="">Not assigned</option>{employees.map((employee) => <option key={employee.id}>{employee.first} {employee.last}</option>)}</select></label><Button type="submit"><Plus size={16} /> Add delivery area</Button></form>
-      <div className="panel master-list-panel"><div className="list-panel-heading"><div><h3>Your delivery areas</h3><p>Areas and assigned team members</p></div><span className="list-count">{areas.length}</span></div><div className="master-list">{areas.map((area) => <div className="master-list-row area-list-row" key={area.id}><span className="area-list-icon"><MapPin size={17} /></span><span className="master-person-name"><strong>{area.name}</strong><small>{area.barangay} barangay</small></span><span className="area-assignee">{area.employee === "Not assigned" ? <span className="unassigned">Not assigned</span> : <><Avatar name={area.employee} size="avatar-small" />{area.employee}</>}</span></div>)}</div></div>
+      <div className="panel master-list-panel"><div className="list-panel-heading"><div><h3>Your delivery areas</h3><p>Areas and assigned team members</p></div><span className="list-count">{areas.length}</span></div><div className="master-list">{areas.length ? areas.map((area) => <div className="master-list-row area-list-row" key={area.id}><span className="area-list-icon"><MapPin size={17} /></span><span className="master-person-name"><strong>{area.name}</strong><small>{area.barangay} barangay</small></span><span className="area-assignee">{area.employee === "Not assigned" ? <span className="unassigned">Not assigned</span> : <><Avatar name={area.employee} size="avatar-small" />{area.employee}</>}</span><button type="button" className="icon-button delete-button" aria-label={`Delete ${area.name} delivery area`} title="Delete delivery area" onClick={() => removeArea(area)}><Trash2 size={16} /></button></div>) : <p className="master-list-empty">No delivery areas added yet.</p>}</div></div>
     </div>
   </section>;
 }
@@ -616,9 +678,9 @@ function TransactionModal({ employees, containers, areas, currency, onClose, onS
         <form onSubmit={submit}>
           <div className="transaction-form-grid">
             <label>Transaction date<input type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} required /></label>
-            <label>Employee<select value={form.employee} onChange={(event) => updateForm("employee", event.target.value)} required>{employees.map((employee) => <option key={employee.id}>{employee.first} {employee.last}</option>)}</select></label>
-            <label>Delivery area<select value={form.area} onChange={(event) => updateForm("area", event.target.value)} required>{areas.map((area) => <option key={area.id}>{area.name}</option>)}</select><small>{selectedArea ? `${selectedArea.barangay} · ${selectedArea.employee}` : "Choose a delivery area"}</small></label>
-            <label>Container<select value={form.container} onChange={(event) => updateForm("container", event.target.value)} required>{containers.map((item) => <option key={item.id}>{item.type}</option>)}</select><small>{selectedContainer ? `${selectedContainer.ownership} · ${formatMoney(selectedContainer.price, currency)} per unit` : "Choose a container"}</small></label>
+            <label>Employee<select value={form.employee} onChange={(event) => updateForm("employee", event.target.value)} required><option value="" disabled>Select an employee</option>{employees.map((employee) => <option key={employee.id}>{employee.first} {employee.last}</option>)}</select></label>
+            <label>Delivery area<select value={form.area} onChange={(event) => updateForm("area", event.target.value)} required><option value="" disabled>Select a delivery area</option>{areas.map((area) => <option key={area.id}>{area.name}</option>)}</select><small>{selectedArea ? `${selectedArea.barangay} · ${selectedArea.employee}` : "Choose a delivery area"}</small></label>
+            <label>Container<select value={form.container} onChange={(event) => updateForm("container", event.target.value)} required><option value="" disabled>Select a container</option>{containers.map((item) => <option key={item.id}>{item.type}</option>)}</select><small>{selectedContainer ? `${selectedContainer.ownership} · ${formatMoney(selectedContainer.price, currency)} per unit` : "Choose a container"}</small></label>
             <label className="issued-field">Quantity issued<input type="number" min="1" value={form.issued} onChange={(event) => { updateForm("issued", event.target.value); setReturnError(""); }} required /></label>
           </div>
           <label className="return-toggle"><input type="checkbox" checked={returnLater} onChange={(event) => setReturnLater(event.target.checked)} /><span className="toggle-track" /><span><strong>Record a return now</strong><small>Skip this if containers are still out for delivery.</small></span></label>
