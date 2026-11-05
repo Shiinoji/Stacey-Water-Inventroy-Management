@@ -1444,4 +1444,26 @@ h1 {
 
 @media (max-width: 560px) {
  .breadcrumbs,
- .table-heading .text-li
+ .table-heading .text-link,
+ .master-tab,
+ .form-panel > label,
+ .transaction-form-grid > label {
+   font-size: 15px;
+ }
+
+ h1 {
+   font-size: 30px;
+ }
+
+ .metric-label {
+   font-size: 13px;
+ }
+
+ .metric-value {
+   font-size: 25px;
+ }
+
+ .data-table td {
+   font-size: 14px;
+ }
+}
