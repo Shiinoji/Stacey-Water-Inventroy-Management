@@ -34,6 +34,7 @@ const localInputDate = (date = new Date()) => {
   return `${year}-${month}-${day}`;
 };
 
+// Returns a YYYY-MM-DD string for a date a given number of days in the past.
 const relativeDate = (daysAgo) => {
   const date = new Date();
   date.setDate(date.getDate() - daysAgo);
@@ -84,6 +85,7 @@ const settingOptions = {
   defaultOwnership: ["Company-owned", "Customer-owned"],
 };
 
+// Reads saved business settings and validates them against the supported options.
 function loadSettings() {
   try {
     const saved = window.localStorage.getItem("stacey-water-settings");
@@ -104,6 +106,7 @@ function loadSettings() {
   }
 }
 
+// Loads a saved list from local storage, falling back to the supplied seed data.
 function loadMasterData(key, initialData) {
   try {
     const saved = window.localStorage.getItem(`stacey-water-${key}`);
@@ -127,6 +130,7 @@ const navItems = [
   { id: "Sales", label: "Sales", icon: Wallet },
 ];
 
+// Formats a number as a currency amount for display.
 const formatMoney = (value, currency = "PHP") =>
   new Intl.NumberFormat("en-PH", {
     style: "currency",
@@ -135,6 +139,7 @@ const formatMoney = (value, currency = "PHP") =>
   }).format(value);
 
 // Small presentational components keep repeated dashboard UI consistent.
+// Displays the brand mark alongside the configured business name.
 function Logo({ businessName }) {
   return (
     <a className="brand" href="#" aria-label={`${businessName} home`}>
@@ -144,10 +149,12 @@ function Logo({ businessName }) {
   );
 }
 
+// Renders the app's shared button styles while forwarding native button props.
 function Button({ children, variant = "primary", className = "", ...props }) {
   return <button className={`button button-${variant} ${className}`} {...props}>{children}</button>;
 }
 
+// Displays a labeled metric with its icon and color treatment.
 function MetricCard({ label, value, icon: Icon, tone = "blue" }) {
   return (
     <article className="metric-card">
@@ -158,10 +165,12 @@ function MetricCard({ label, value, icon: Icon, tone = "blue" }) {
   );
 }
 
+// Displays a short status label with a visual status color.
 function StatusPill({ children, kind = "green" }) {
   return <span className={`status-pill status-${kind}`}>{children}</span>;
 }
 
+// Shows a consistent message when a section has no content to display.
 function EmptyState({ icon: Icon, title, text, action }) {
   return (
     <div className="empty-state">
@@ -217,6 +226,7 @@ function App() {
     ));
   }, [transactions, employees, areas, containers]);
 
+  // Totals are calculated from transactions that still match current master data.
   const totalIssued = activeTransactions.reduce((sum, item) => sum + item.issued, 0);
   const totalReturned = activeTransactions.reduce((sum, item) => sum + item.returned, 0);
   const totalSales = activeTransactions.reduce((sum, item) => sum + (item.issued - item.returned) * item.unitPrice, 0);
@@ -230,13 +240,17 @@ function App() {
     return matchesSearch && matchesEmployee && matchesArea && matchesContainer;
   }), [transactions, search, appliedFilters]);
 
+  // Opens the form for recording a new delivery.
   const openNewTransaction = () => setShowTransaction(true);
+
+  // Shows a temporary toast message, replacing any message already on screen.
   const notify = (message) => {
     window.clearTimeout(toastTimeout.current);
     setToast(message);
     toastTimeout.current = window.setTimeout(() => setToast(""), 3200);
   };
 
+  // Validates and persists business settings before updating the app state.
   const saveSettings = (updatedSettings) => {
     if (!updatedSettings.businessName.trim()) {
       notify("Business name is required.");
@@ -253,6 +267,7 @@ function App() {
     }
   };
 
+  // Downloads all workspace settings and records as a JSON backup.
   const exportWorkspaceData = () => {
     try {
       const backup = {
@@ -282,6 +297,7 @@ function App() {
     }
   };
 
+  // Clears stored workspace records and restores the default business settings.
   const resetWorkspaceData = () => {
     try {
       const emptyList = JSON.stringify([]);
@@ -322,11 +338,13 @@ function App() {
     notify("Delivery added to pending");
   };
 
+  // Selects a pending delivery and navigates to its completion form.
   const openDeliveryConfirmation = (item) => {
     setDeliveryConfirmationId(item.id);
     setPage("Delivery confirmation");
   };
 
+  // Validates a completed delivery, then moves it from pending to transaction history.
   const completeDelivery = (item) => {
     const accountedFor = Number(item.returned || 0) + Number(item.damaged || 0) + Number(item.lost || 0);
     if (accountedFor > Number(item.issued)) {
@@ -344,6 +362,7 @@ function App() {
     return null;
   };
 
+  // Navigates to the selected page and closes the mobile navigation drawer.
   const handleNav = (id) => {
     setPage(id);
     setSidebarOpen(false);
@@ -513,6 +532,7 @@ function TransactionsPage({ transactions, pendingTransactions, allTransactions, 
   );
 }
 
+// Collects final returned, damaged, and lost counts for a pending delivery.
 function DeliveryConfirmationPage({ transaction, dateFormat, currency, onBack, onConfirm }) {
   const [quantities, setQuantities] = useState({
     returned: String(transaction.returned ?? 0),
@@ -521,11 +541,13 @@ function DeliveryConfirmationPage({ transaction, dateFormat, currency, onBack, o
   });
   const [error, setError] = useState("");
 
+  // Updates a delivery result count and clears any previous validation message.
   const updateQuantity = (field, value) => {
     setQuantities((current) => ({ ...current, [field]: value }));
     setError("");
   };
 
+  // Submits the final delivery counts to the app for validation and completion.
   const submit = (event) => {
     event.preventDefault();
     const updatedTransaction = {
@@ -590,13 +612,17 @@ function DeliveryConfirmationPage({ transaction, dateFormat, currency, onBack, o
   );
 }
 
+// Edits workspace preferences and provides backup and reset actions.
 function SettingsPage({ settings, onSave, onResetData, onExportData }) {
   const [form, setForm] = useState(settings);
+  // Updates one field in the editable settings form.
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  // Saves the form after trimming the required business name.
   const submit = (event) => {
     event.preventDefault();
     onSave({ ...form, businessName: form.businessName.trim() });
   };
+  // Confirms before asking the app to erase all saved workspace records.
   const resetData = () => {
     const confirmed = window.confirm("Reset all workspace data? This permanently deletes employees, containers, delivery areas, pending deliveries, transaction history, and saved settings.");
     if (confirmed && onResetData()) setForm({ ...defaultSettings });
@@ -748,6 +774,7 @@ function SalesPage({ transactions, currency, dateFormat }) {
 }
 
 // Master data tabs manage the employee, container, and delivery-area lists.
+// Switches between the employee, container, and delivery-area management sections.
 function MasterDataPage({ section, setSection, employees, setEmployees, containers, setContainers, currency, defaultOwnership, areas, setAreas, notify }) {
   return (
     <>
@@ -767,6 +794,7 @@ function MasterDataPage({ section, setSection, employees, setEmployees, containe
 // Each master form keeps its draft local and commits a validated record on submit.
 function EmployeesMaster({ employees, setEmployees, setAreas, notify }) {
   const [form, setForm] = useState({ first: "", last: "", phone: "" });
+  // Adds a validated employee record and clears the entry form.
   const submit = (event) => {
     event.preventDefault();
     if (!form.first.trim() || !form.last.trim()) return;
@@ -774,6 +802,7 @@ function EmployeesMaster({ employees, setEmployees, setAreas, notify }) {
     setForm({ first: "", last: "", phone: "" });
     notify("Employee added successfully");
   };
+  // Deletes an employee and clears any delivery-area assignment no longer valid.
   const removeEmployee = (person) => {
     const name = `${person.first} ${person.last}`;
     if (!window.confirm(`Delete ${name}? Existing transactions will be kept.`)) return;
@@ -798,6 +827,7 @@ function EmployeesMaster({ employees, setEmployees, setAreas, notify }) {
 function ContainersMaster({ containers, setContainers, currency, defaultOwnership, notify }) {
   const initialForm = { type: "", ownership: defaultOwnership, status: "Active", price: "" };
   const [form, setForm] = useState(initialForm);
+  // Adds a container record with its price stored as a number.
   const submit = (event) => {
     event.preventDefault();
     if (!form.type.trim() || !form.price) return;
@@ -805,6 +835,7 @@ function ContainersMaster({ containers, setContainers, currency, defaultOwnershi
     setForm(initialForm);
     notify("Container added successfully");
   };
+  // Deletes a container type after confirmation, preserving existing transactions.
   const removeContainer = (item) => {
     if (!window.confirm(`Delete ${item.type} (${item.ownership})? Existing transactions will be kept.`)) return;
     setContainers((current) => current.filter((container) => container.id !== item.id));
@@ -821,6 +852,7 @@ function ContainersMaster({ containers, setContainers, currency, defaultOwnershi
 
 function AreasMaster({ areas, setAreas, employees, notify }) {
   const [form, setForm] = useState({ name: "", barangay: "", employee: "" });
+  // Adds a delivery area, defaulting its employee assignment when none is selected.
   const submit = (event) => {
     event.preventDefault();
     if (!form.name.trim() || !form.barangay.trim()) return;
@@ -828,6 +860,7 @@ function AreasMaster({ areas, setAreas, employees, notify }) {
     setForm({ name: "", barangay: "", employee: "" });
     notify("Delivery area added successfully");
   };
+  // Deletes a delivery area after confirmation without changing historical records.
   const removeArea = (area) => {
     if (!window.confirm(`Delete the ${area.name} delivery area? Existing transactions will be kept.`)) return;
     setAreas((current) => current.filter((item) => item.id !== area.id));
@@ -842,7 +875,7 @@ function AreasMaster({ areas, setAreas, employees, notify }) {
   </section>;
 }
 
-// Checks that returned, damaged, and lost quantities do not exceed those issued.
+// Creates a delivery transaction and validates its container counts before saving.
 function TransactionModal({ employees, containers, areas, currency, onClose, onSave }) {
   const [form, setForm] = useState({
     date: localInputDate(),
@@ -856,8 +889,10 @@ function TransactionModal({ employees, containers, areas, currency, onClose, onS
   const selectedArea = areas.find((area) => area.name === form.area);
   // Container types can repeat with different ownership and prices, so select by record ID.
   const selectedContainer = containers.find((item) => String(item.id) === form.containerId);
+  // Updates a transaction field while preserving the other form values.
   const updateForm = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
+  // Validates transaction details and sends the new delivery data to the app.
   const submit = (event) => {
     event.preventDefault();
     if (!form.employee || !selectedContainer || !form.area || Number(form.issued) < 1) return;
@@ -910,6 +945,7 @@ function TransactionModal({ employees, containers, areas, currency, onClose, onS
   );
 }
 
+// Formats a date using one of the workspace's supported display formats.
 function formatDate(value, format = "MMM d, yyyy") {
   const date = value instanceof Date ? value : new Date(`${value}T00:00:00`);
   const year = date.getFullYear();
