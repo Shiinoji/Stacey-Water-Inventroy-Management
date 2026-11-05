@@ -136,23 +136,6 @@ select:focus-visible {
   background: #c3d6e1;
   color: #345d75;
 }
-.avatar {
-  flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 50%;
-  color: #325c74;
-  background: #d8e3e9;
-  font-size: 10px;
-  font-weight: 750;
-}
-.avatar-small {
-  width: 25px;
-  height: 25px;
-  font-size: 8px;
-}
 .main-area {
   min-height: 100vh;
   margin-left: 252px;
@@ -411,7 +394,6 @@ h1 {
 .person-cell {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
   color: #575d61;
 }
 .muted {
@@ -1398,8 +1380,6 @@ h1 {
 .optional,
 .form-error,
 .nav-count,
-.avatar,
-.avatar-small,
 .list-count,
 .master-tab span,
 .master-person-name small,

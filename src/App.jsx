@@ -158,11 +158,6 @@ function MetricCard({ label, value, icon: Icon, tone = "blue" }) {
   );
 }
 
-function Avatar({ name, size = "" }) {
-  const initials = name.split(" ").map((part) => part[0]).slice(0, 2).join("");
-  return <span className={`avatar ${size}`}>{initials}</span>;
-}
-
 function StatusPill({ children, kind = "green" }) {
   return <span className={`status-pill status-${kind}`}>{children}</span>;
 }
@@ -488,13 +483,13 @@ function TransactionTable({ transactions, compact = false, dateFormat }) {
             const isReturned = item.returned > 0;
             if (compact) return <tr key={item.id}>
               <td><span className="table-id">{item.id}</span></td>
-              <td><span className="person-cell"><Avatar name={item.employee} size="avatar-small" /><span>{item.employee}</span></span></td>
+              <td><span className="person-cell">{item.employee}</span></td>
               <td>{item.area}</td><td>{formatDate(item.date, dateFormat)}</td><td><strong>{item.issued}</strong></td>
               <td><StatusPill kind={isReturned ? "green" : "amber"}>{isReturned ? "Returned" : "In transit"}</StatusPill></td>
             </tr>;
             return <tr key={item.id}>
               <td><span className="table-id">{item.id}</span></td><td>{formatDate(item.date, dateFormat)}</td>
-              <td><span className="person-cell"><Avatar name={item.employee} size="avatar-small" /><span>{item.employee}</span></span></td>
+              <td><span className="person-cell">{item.employee}</span></td>
               <td>{item.container}</td><td>{item.area}</td><td><strong>{item.issued}</strong></td>
               <td>{item.returned}</td><td>{item.damaged ? <span className="number-alert">{item.damaged}</span> : <span className="muted">—</span>}</td><td>{item.lost ? <span className="number-alert">{item.lost}</span> : <span className="muted">—</span>}</td>
             </tr>;
@@ -533,7 +528,7 @@ function SalesPage({ transactions, currency, dateFormat, openNewTransaction }) {
       <section className="panel table-panel">
         <div className="panel-heading table-heading"><div><h2>Recent sales</h2><p>Every sale is linked to its original transaction</p></div></div>
         <div className="table-scroll"><table className="data-table sales-table"><thead><tr><th>Sale ID</th><th>Date</th><th>Transaction</th><th>Containers out</th><th>Unit price</th><th>Total amount</th><th>Recorded by</th></tr></thead>
-          <tbody>{periodSales.length ? periodSales.map((sale) => <tr key={sale.id}><td><span className="table-id">{sale.id}</span></td><td>{formatDate(sale.date, dateFormat)}</td><td><span className="table-id secondary-id">{sale.transaction}</span></td><td><strong>{sale.containers}</strong> <span className="muted">containers</span></td><td>{formatMoney(sale.price, currency)}</td><td className="money-cell">{formatMoney(sale.containers * sale.price, currency)}</td><td><span className="person-cell"><Avatar name={sale.employee} size="avatar-small" /><span>{sale.employee}</span></span></td></tr>) : <tr><td colSpan="7" className="sales-empty">No sales recorded in this period.</td></tr>}</tbody>
+          <tbody>{periodSales.length ? periodSales.map((sale) => <tr key={sale.id}><td><span className="table-id">{sale.id}</span></td><td>{formatDate(sale.date, dateFormat)}</td><td><span className="table-id secondary-id">{sale.transaction}</span></td><td><strong>{sale.containers}</strong></td><td>{formatMoney(sale.price, currency)}</td><td className="money-cell">{formatMoney(sale.containers * sale.price, currency)}</td><td><span className="person-cell">{sale.employee}</span></td></tr>) : <tr><td colSpan="7" className="sales-empty">No sales recorded in this period.</td></tr>}</tbody>
         </table></div>
         <div className="sales-note">Sales are based on containers issued minus returns, multiplied by the unit price.</div>
       </section>
@@ -584,7 +579,7 @@ function EmployeesMaster({ employees, setEmployees, setAreas, notify }) {
     <div className="master-intro"><span className="master-intro-icon people-intro"><Users size={19} /></span><div><h2>Employees</h2><p>People who make every delivery possible.</p></div></div>
     <div className="master-columns">
       <form className="panel form-panel" onSubmit={submit}><div className="form-panel-title"><h3>Add an employee</h3></div><label>First name<input value={form.first} onChange={(event) => setForm({ ...form, first: event.target.value })} placeholder="e.g. Jamie" required /></label><label>Last name<input value={form.last} onChange={(event) => setForm({ ...form, last: event.target.value })} placeholder="e.g. Rivera" required /></label><label>Contact number <span className="optional">(optional)</span><input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="+63 9XX XXX XXXX" /></label><Button type="submit"><Plus size={16} /> Add employee</Button></form>
-      <div className="panel master-list-panel"><div className="list-panel-heading"><div><h3>Your team</h3><p>Manage your delivery staff</p></div><span className="list-count">{employees.length}</span></div><div className="master-list">{employees.length ? employees.map((person) => <div className="master-list-row" key={person.id}><Avatar name={`${person.first} ${person.last}`} /><span className="master-person-name"><strong>{person.first} {person.last}</strong><small>{person.phone || "No contact number"}</small></span><button type="button" className="icon-button delete-button" aria-label={`Delete ${person.first} ${person.last}`} title="Delete employee" onClick={() => removeEmployee(person)}><Trash2 size={16} /></button></div>) : <p className="master-list-empty">No employees added yet.</p>}</div></div>
+      <div className="panel master-list-panel"><div className="list-panel-heading"><div><h3>Your team</h3><p>Manage your delivery staff</p></div><span className="list-count">{employees.length}</span></div><div className="master-list">{employees.length ? employees.map((person) => <div className="master-list-row" key={person.id}><span className="master-person-name"><strong>{person.first} {person.last}</strong><small>{person.phone || "No contact number"}</small></span><button type="button" className="icon-button delete-button" aria-label={`Delete ${person.first} ${person.last}`} title="Delete employee" onClick={() => removeEmployee(person)}><Trash2 size={16} /></button></div>) : <p className="master-list-empty">No employees added yet.</p>}</div></div>
     </div>
   </section>;
 }
@@ -631,7 +626,7 @@ function AreasMaster({ areas, setAreas, employees, notify }) {
     <div className="master-intro"><span className="master-intro-icon area-intro"><MapPin size={19} /></span><div><h2>Delivery areas</h2><p>Organize your routes by neighborhood and barangay.</p></div></div>
     <div className="master-columns">
       <form className="panel form-panel" onSubmit={submit}><div className="form-panel-title"><h3>Add a delivery area</h3></div><label>Area name<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="e.g. Riverside" required /></label><label>Barangay<input value={form.barangay} onChange={(event) => setForm({ ...form, barangay: event.target.value })} placeholder="e.g. San Isidro" required /></label><label>Assigned employee <span className="optional">(optional)</span><select value={form.employee} onChange={(event) => setForm({ ...form, employee: event.target.value })}><option value="">Not assigned</option>{employees.map((employee) => <option key={employee.id}>{employee.first} {employee.last}</option>)}</select></label><Button type="submit"><Plus size={16} /> Add delivery area</Button></form>
-      <div className="panel master-list-panel"><div className="list-panel-heading"><div><h3>Your delivery areas</h3><p>Areas and assigned team members</p></div><span className="list-count">{areas.length}</span></div><div className="master-list">{areas.length ? areas.map((area) => <div className="master-list-row area-list-row" key={area.id}><span className="area-list-icon"><MapPin size={17} /></span><span className="master-person-name"><strong>{area.name}</strong><small>{area.barangay} barangay</small></span><span className="area-assignee">{area.employee === "Not assigned" ? <span className="unassigned">Not assigned</span> : <><Avatar name={area.employee} size="avatar-small" />{area.employee}</>}</span><button type="button" className="icon-button delete-button" aria-label={`Delete ${area.name} delivery area`} title="Delete delivery area" onClick={() => removeArea(area)}><Trash2 size={16} /></button></div>) : <p className="master-list-empty">No delivery areas added yet.</p>}</div></div>
+      <div className="panel master-list-panel"><div className="list-panel-heading"><div><h3>Your delivery areas</h3><p>Areas and assigned team members</p></div><span className="list-count">{areas.length}</span></div><div className="master-list">{areas.length ? areas.map((area) => <div className="master-list-row area-list-row" key={area.id}><span className="area-list-icon"><MapPin size={17} /></span><span className="master-person-name"><strong>{area.name}</strong><small>{area.barangay} barangay</small></span><span className="area-assignee">{area.employee === "Not assigned" ? <span className="unassigned">Not assigned</span> : area.employee}</span><button type="button" className="icon-button delete-button" aria-label={`Delete ${area.name} delivery area`} title="Delete delivery area" onClick={() => removeArea(area)}><Trash2 size={16} /></button></div>) : <p className="master-list-empty">No delivery areas added yet.</p>}</div></div>
     </div>
   </section>;
 }
