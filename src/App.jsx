@@ -1,0 +1,645 @@
+import { useMemo, useState } from "react";
+import {
+  ArrowDownLeft,
+  ArrowDownRight,
+  ArrowRight,
+  Boxes,
+  CalendarDays,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Droplets,
+  Filter,
+  LayoutDashboard,
+  MapPin,
+  Menu,
+  Package,
+  Plus,
+  Search,
+  Settings,
+  Settings2,
+  ShoppingBag,
+  Users,
+  Wallet,
+  X,
+} from "lucide-react";
+
+// Build date-input values from local calendar fields to avoid UTC date shifts.
+const localInputDate = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const relativeDate = (daysAgo) => {
+  const date = new Date();
+  date.setDate(date.getDate() - daysAgo);
+  return localInputDate(date);
+};
+
+// These in-memory records seed the demo workspace when the app first loads.
+const initialEmployees = [
+  { id: 1, first: "Marco", last: "Reyes", phone: "0917 555 0182" },
+  { id: 2, first: "Ana", last: "Santos", phone: "0918 240 7721" },
+  { id: 3, first: "Rafael", last: "Cruz", phone: "0920 318 6640" },
+];
+
+const initialContainers = [
+  { id: 1, type: "5-gallon jug", ownership: "Company-owned", status: "Active", price: 35 },
+  { id: 2, type: "Water dispenser", ownership: "Company-owned", status: "Active", price: 250 },
+  { id: 3, type: "5-gallon jug", ownership: "Customer-owned", status: "Active", price: 30 },
+];
+
+const initialAreas = [
+  { id: 1, name: "Riverside", barangay: "San Isidro", employee: "Marco Reyes" },
+  { id: 2, name: "North Park", barangay: "Poblacion", employee: "Ana Santos" },
+  { id: 3, name: "Lakeside", barangay: "San Roque", employee: "Rafael Cruz" },
+];
+
+const initialTransactions = [
+  { id: "TR-1048", date: relativeDate(0), employee: "Marco Reyes", container: "5-gallon jug", area: "Riverside", issued: 18, returned: 12, damaged: 1, lost: 0, unitPrice: 35 },
+  { id: "TR-1047", date: relativeDate(0), employee: "Ana Santos", container: "5-gallon jug", area: "North Park", issued: 24, returned: 19, damaged: 0, lost: 1, unitPrice: 35 },
+  { id: "TR-1046", date: relativeDate(1), employee: "Rafael Cruz", container: "Water dispenser", area: "Lakeside", issued: 4, returned: 3, damaged: 0, lost: 0, unitPrice: 250 },
+  { id: "TR-1045", date: relativeDate(1), employee: "Marco Reyes", container: "5-gallon jug", area: "Riverside", issued: 16, returned: 14, damaged: 0, lost: 0, unitPrice: 35 },
+  { id: "TR-1044", date: relativeDate(2), employee: "Ana Santos", container: "5-gallon jug", area: "North Park", issued: 20, returned: 17, damaged: 1, lost: 0, unitPrice: 35 },
+  { id: "TR-1043", date: relativeDate(2), employee: "Rafael Cruz", container: "Water dispenser", area: "Lakeside", issued: 6, returned: 5, damaged: 0, lost: 0, unitPrice: 250 },
+];
+
+const defaultSettings = {
+  businessName: "Stacey Water",
+  email: "",
+  phone: "",
+  address: "",
+  currency: "PHP",
+  dateFormat: "MMM d, yyyy",
+  defaultOwnership: "Company-owned",
+};
+
+const settingOptions = {
+  currency: ["PHP", "USD"],
+  dateFormat: ["MMM d, yyyy", "dd/MM/yyyy", "yyyy-MM-dd"],
+  defaultOwnership: ["Company-owned", "Customer-owned"],
+};
+
+function loadSettings() {
+  try {
+    const saved = window.localStorage.getItem("stacey-water-settings");
+    if (!saved) return defaultSettings;
+
+    const parsed = JSON.parse(saved);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return defaultSettings;
+    return Object.fromEntries(Object.keys(defaultSettings).map((key) => {
+      const value = parsed[key];
+      const valid = settingOptions[key]
+        ? settingOptions[key].includes(value)
+        : typeof value === "string";
+      return [key, valid ? value : defaultSettings[key]];
+    }));
+  } catch (error) {
+    console.error("Unable to load saved business settings.", error);
+    return defaultSettings;
+  }
+}
+
+// Shared navigation and currency helpers keep labels and totals consistent.
+const navItems = [
+  { id: "Dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "Transactions", label: "Transactions", icon: ArrowDownRight },
+  { id: "Sales", label: "Sales", icon: Wallet },
+  { id: "Settings", label: "Settings", icon: Settings },
+];
+
+const formatMoney = (value, currency = "PHP") =>
+  new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(value);
+
+// Small presentational components keep repeated dashboard UI consistent.
+function Logo({ businessName }) {
+  return (
+    <a className="brand" href="#" aria-label={`${businessName} home`}>
+      <span className="brand-mark"><Droplets size={20} strokeWidth={2.2} /></span>
+      <span>{businessName}</span>
+    </a>
+  );
+}
+
+function Button({ children, variant = "primary", className = "", ...props }) {
+  return <button className={`button button-${variant} ${className}`} {...props}>{children}</button>;
+}
+
+function MetricCard({ label, value, icon: Icon, tone = "blue" }) {
+  return (
+    <article className="metric-card">
+      <div className={`metric-icon metric-${tone}`}><Icon size={19} /></div>
+      <div className="metric-label">{label}</div>
+      <div className="metric-value">{value}</div>
+    </article>
+  );
+}
+
+function Avatar({ name, size = "" }) {
+  const initials = name.split(" ").map((part) => part[0]).slice(0, 2).join("");
+  return <span className={`avatar ${size}`}>{initials}</span>;
+}
+
+function StatusPill({ children, kind = "green" }) {
+  return <span className={`status-pill status-${kind}`}><span />{children}</span>;
+}
+
+function EmptyState({ icon: Icon, title, text, action }) {
+  return (
+    <div className="empty-state">
+      <span className="empty-icon"><Icon size={24} /></span>
+      <strong>{title}</strong>
+      <span>{text}</span>
+      {action}
+    </div>
+  );
+}
+
+// Owns workspace state and routes the selected page to its content component.
+function App() {
+  const [page, setPage] = useState("Dashboard");
+  const [masterSection, setMasterSection] = useState("Employees");
+  const [transactions, setTransactions] = useState(initialTransactions);
+  const [employees, setEmployees] = useState(initialEmployees);
+  const [containers, setContainers] = useState(initialContainers);
+  const [areas, setAreas] = useState(initialAreas);
+  const [settings, setSettings] = useState(loadSettings);
+  const [showTransaction, setShowTransaction] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState({ employee: "All employees", area: "All areas", container: "All containers" });
+  const [appliedFilters, setAppliedFilters] = useState({ employee: "All employees", area: "All areas", container: "All containers" });
+  const [toast, setToast] = useState("");
+
+  const totalIssued = transactions.reduce((sum, item) => sum + item.issued, 0);
+  const totalReturned = transactions.reduce((sum, item) => sum + item.returned, 0);
+  const totalSales = transactions.reduce((sum, item) => sum + (item.issued - item.returned) * item.unitPrice, 0);
+
+  // Search is immediate; the selected dropdown filters apply on user action.
+  const filteredTransactions = useMemo(() => transactions.filter((item) => {
+    const matchesSearch = `${item.id} ${item.employee} ${item.container} ${item.area}`.toLowerCase().includes(search.toLowerCase());
+    const matchesEmployee = appliedFilters.employee === "All employees" || item.employee === appliedFilters.employee;
+    const matchesArea = appliedFilters.area === "All areas" || item.area === appliedFilters.area;
+    const matchesContainer = appliedFilters.container === "All containers" || item.container === appliedFilters.container;
+    return matchesSearch && matchesEmployee && matchesArea && matchesContainer;
+  }), [transactions, search, appliedFilters]);
+
+  const openNewTransaction = () => setShowTransaction(true);
+  const notify = (message) => {
+    setToast(message);
+    window.setTimeout(() => setToast(""), 3200);
+  };
+
+  const saveSettings = (updatedSettings) => {
+    if (!updatedSettings.businessName.trim()) {
+      notify("Business name is required.");
+      return;
+    }
+
+    try {
+      window.localStorage.setItem("stacey-water-settings", JSON.stringify(updatedSettings));
+      setSettings(updatedSettings);
+      notify("Settings saved");
+    } catch (error) {
+      console.error("Unable to save business settings.", error);
+      notify("Settings could not be saved. Check your browser storage and try again.");
+    }
+  };
+
+  // Add a saved transaction to the front of the activity list and notify the user.
+  const saveTransaction = (values) => {
+    const newItem = {
+      ...values,
+      id: `TR-${1049 + transactions.length - initialTransactions.length}`,
+    };
+    setTransactions((current) => [newItem, ...current]);
+    setShowTransaction(false);
+    setPage("Transactions");
+    notify("Transaction recorded successfully");
+  };
+
+  const handleNav = (id) => {
+    setPage(id);
+    setSidebarOpen(false);
+  };
+
+  const pageTitle = page === "Master data" ? masterSection : page;
+
+  return (
+    <div className="app-shell">
+      <aside className={`sidebar ${sidebarOpen ? "sidebar-open" : ""}`}>
+        <div className="sidebar-top"><Logo businessName={settings.businessName} /><button className="mobile-close icon-button" onClick={() => setSidebarOpen(false)} aria-label="Close menu"><X size={20} /></button></div>
+        <nav className="main-nav" aria-label="Main navigation">
+          {navItems.map(({ id, label, icon: Icon }) => (
+            <button key={id} onClick={() => handleNav(id)} className={`nav-link ${page === id ? "nav-active" : ""}`}>
+              <Icon size={18} strokeWidth={1.8} /><span>{label}</span>
+              {id === "Transactions" && <span className="nav-count">{transactions.length}</span>}
+            </button>
+          ))}
+        </nav>
+        <button onClick={() => { setPage("Master data"); setMasterSection("Employees"); setSidebarOpen(false); }} className={`nav-link ${page === "Master data" ? "nav-active" : ""}`}>
+          <Settings2 size={18} strokeWidth={1.8} /><span>Master data</span>
+        </button>
+      </aside>
+
+      {sidebarOpen && <button className="sidebar-scrim" onClick={() => setSidebarOpen(false)} aria-label="Close navigation" />}
+
+      <main className="main-area">
+        <header className="topbar">
+          <div className="topbar-left">
+            <button className="mobile-menu icon-button" onClick={() => setSidebarOpen(true)} aria-label="Open menu"><Menu size={21} /></button>
+            <div className="breadcrumbs"><span>Workspace</span><ChevronRight size={14} /><strong>{pageTitle}</strong></div>
+          </div>
+        </header>
+
+        <div className="page-content">
+          {page === "Dashboard" && <DashboardPage transactions={transactions} totalIssued={totalIssued} totalReturned={totalReturned} totalSales={totalSales} currency={settings.currency} dateFormat={settings.dateFormat} openNewTransaction={openNewTransaction} setPage={setPage} />}
+          {page === "Transactions" && <TransactionsPage
+            transactions={filteredTransactions}
+            totalCount={transactions.length}
+            employees={employees}
+            areas={areas}
+            containers={containers}
+            filters={filters}
+            setFilters={setFilters}
+            setAppliedFilters={setAppliedFilters}
+            search={search}
+            setSearch={setSearch}
+            openNewTransaction={openNewTransaction}
+            dateFormat={settings.dateFormat}
+          />}
+          {page === "Sales" && <SalesPage transactions={transactions} currency={settings.currency} dateFormat={settings.dateFormat} openNewTransaction={openNewTransaction} />}
+          {page === "Master data" && <MasterDataPage
+            section={masterSection}
+            setSection={setMasterSection}
+            employees={employees}
+            setEmployees={setEmployees}
+            containers={containers}
+            setContainers={setContainers}
+            currency={settings.currency}
+            defaultOwnership={settings.defaultOwnership}
+            areas={areas}
+            setAreas={setAreas}
+            notify={notify}
+          />}
+          {page === "Settings" && <SettingsPage settings={settings} onSave={saveSettings} />}
+        </div>
+      </main>
+
+      {showTransaction && <TransactionModal
+        employees={employees}
+        containers={containers}
+        areas={areas}
+        currency={settings.currency}
+        onClose={() => setShowTransaction(false)}
+        onSave={saveTransaction}
+      />}
+      {toast && <div className="toast"><span><Check size={16} /></span>{toast}</div>}
+    </div>
+  );
+}
+
+// Page-level sections share the same heading and optional action layout.
+function PageHeading({ eyebrow, title, description, children }) {
+  return (
+    <div className="page-heading">
+      <div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1>{description && <p>{description}</p>}</div>
+      {children && <div className="heading-actions">{children}</div>}
+    </div>
+  );
+}
+
+// The dashboard highlights current totals and recent transaction activity.
+function DashboardPage({ transactions, totalIssued, totalReturned, totalSales, currency, dateFormat, openNewTransaction, setPage }) {
+  return (
+    <>
+      <PageHeading eyebrow={formatDate(new Date(), dateFormat).toUpperCase()} title="Dashboard" description="A clear snapshot of your inventory and delivery activity.">
+        <Button onClick={openNewTransaction}><Plus size={17} /> New transaction</Button>
+      </PageHeading>
+
+      <section className="metrics-grid">
+        <MetricCard label="Containers issued" value={totalIssued} icon={Package} tone="blue" />
+        <MetricCard label="Containers returned" value={totalReturned} icon={ArrowDownLeft} tone="green" />
+        <MetricCard label="Still out" value={totalIssued - totalReturned} icon={ArrowDownRight} tone="amber" />
+        <MetricCard label="Recorded sales" value={formatMoney(totalSales, currency)} icon={Wallet} tone="purple" />
+      </section>
+
+      <section className="panel table-panel">
+        <div className="panel-heading table-heading">
+          <div><h2>Recent activity</h2><p>Your latest container movements</p></div>
+          <button className="text-link" onClick={() => setPage("Transactions")}>View all transactions <ArrowRight size={15} /></button>
+        </div>
+        <TransactionTable transactions={transactions.slice(0, 5)} compact dateFormat={dateFormat} />
+      </section>
+    </>
+  );
+}
+
+// Provides transaction search, staged filters, and an empty state when nothing matches.
+function TransactionsPage({ transactions, totalCount, employees, areas, containers, filters, setFilters, setAppliedFilters, search, setSearch, openNewTransaction, dateFormat }) {
+  return (
+    <>
+      <PageHeading eyebrow="INVENTORY MOVEMENT" title="Transactions" description="Track every container as it moves through your business.">
+        <Button onClick={openNewTransaction}><Plus size={17} /> New transaction</Button>
+      </PageHeading>
+      <section className="filter-toolbar">
+        <div className="search-field"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search transactions..." /></div>
+        <label className="filter-select"><select value={filters.employee} onChange={(event) => setFilters({ ...filters, employee: event.target.value })}><option>All employees</option>{employees.map((employee) => <option key={employee.id}>{employee.first} {employee.last}</option>)}</select><ChevronDown size={15} /></label>
+        <label className="filter-select"><select value={filters.area} onChange={(event) => setFilters({ ...filters, area: event.target.value })}><option>All areas</option>{areas.map((area) => <option key={area.id}>{area.name}</option>)}</select><ChevronDown size={15} /></label>
+        <label className="filter-select"><select value={filters.container} onChange={(event) => setFilters({ ...filters, container: event.target.value })}><option>All containers</option>{[...new Set(containers.map((item) => item.type))].map((type) => <option key={type}>{type}</option>)}</select><ChevronDown size={15} /></label>
+        <Button variant="secondary" className="filter-button" onClick={() => setAppliedFilters(filters)}><Filter size={15} /> Filter</Button>
+      </section>
+      <div className="result-caption"><strong>{transactions.length}</strong> matching transactions</div>
+      <section className="panel table-panel transactions-table-panel">
+        {transactions.length ? <TransactionTable transactions={transactions} dateFormat={dateFormat} /> : <EmptyState icon={Search} title="No transactions found" text="Try changing your search or filters to find what you’re looking for." action={<button className="text-link" onClick={() => { setSearch(""); setFilters({ employee: "All employees", area: "All areas", container: "All containers" }); setAppliedFilters({ employee: "All employees", area: "All areas", container: "All containers" }); }}>Clear all filters</button>} />}
+      </section>
+      <div className="table-footer">Showing {transactions.length} of {totalCount} transactions</div>
+    </>
+  );
+}
+
+function SettingsPage({ settings, onSave }) {
+  const [form, setForm] = useState(settings);
+  const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  const submit = (event) => {
+    event.preventDefault();
+    onSave({ ...form, businessName: form.businessName.trim() });
+  };
+
+  return (
+    <form className="settings-page" onSubmit={submit}>
+      <PageHeading eyebrow="WORKSPACE PREFERENCES" title="Settings" description="Manage your business profile and inventory defaults." />
+      <section className="panel settings-section">
+        <div className="settings-section-heading">
+          <h2>Business profile</h2>
+          <p>These details identify your Stacey Water workspace.</p>
+        </div>
+        <div className="settings-grid">
+          <label>Business name
+            <input value={form.businessName} onChange={(event) => update("businessName", event.target.value)} required />
+          </label>
+          <label>Contact email
+            <input type="email" value={form.email} onChange={(event) => update("email", event.target.value)} placeholder="name@example.com" />
+          </label>
+          <label>Phone number
+            <input type="tel" value={form.phone} onChange={(event) => update("phone", event.target.value)} placeholder="+63 9XX XXX XXXX" />
+          </label>
+          <label>Business address
+            <input value={form.address} onChange={(event) => update("address", event.target.value)} placeholder="Street, city, province" />
+          </label>
+        </div>
+      </section>
+
+      <section className="panel settings-section">
+        <div className="settings-section-heading">
+          <h2>Regional preferences</h2>
+          <p>Choose how prices and dates appear throughout the app.</p>
+        </div>
+        <div className="settings-grid">
+          <label>Currency
+            <select value={form.currency} onChange={(event) => update("currency", event.target.value)}>
+              <option value="PHP">Philippine peso (PHP)</option>
+              <option value="USD">US dollar (USD)</option>
+            </select>
+          </label>
+          <label>Date format
+            <select value={form.dateFormat} onChange={(event) => update("dateFormat", event.target.value)}>
+              <option value="MMM d, yyyy">Nov 5, 2026</option>
+              <option value="dd/MM/yyyy">05/11/2026</option>
+              <option value="yyyy-MM-dd">2026-11-05</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section className="panel settings-section">
+        <div className="settings-section-heading">
+          <h2>Inventory defaults</h2>
+          <p>Set the default ownership type for new container records.</p>
+        </div>
+        <div className="settings-grid">
+          <label>Default container ownership
+            <select value={form.defaultOwnership} onChange={(event) => update("defaultOwnership", event.target.value)}>
+              <option value="Company-owned">Company-owned</option>
+              <option value="Customer-owned">Customer-owned</option>
+            </select>
+          </label>
+        </div>
+      </section>
+      <div className="settings-actions"><Button type="submit"><Check size={16} /> Save settings</Button></div>
+    </form>
+  );
+}
+
+// Supports a compact dashboard table and a detailed transaction ledger.
+function TransactionTable({ transactions, compact = false, dateFormat }) {
+  return (
+    <div className="table-scroll">
+      <table className={compact ? "data-table compact-table" : "data-table"}>
+        <thead><tr>{(compact ? ["Transaction", "Employee", "Delivery area", "Date", "Containers", "Status"] : ["Transaction", "Date", "Employee", "Container", "Delivery area", "Issued", "Returned", "Damaged", "Lost"]).map((label) => <th key={label}>{label}</th>)}</tr></thead>
+        <tbody>
+          {transactions.map((item) => {
+            const isReturned = item.returned > 0;
+            if (compact) return <tr key={item.id}>
+              <td><span className="table-id">{item.id}</span></td>
+              <td><span className="person-cell"><Avatar name={item.employee} size="avatar-small" /><span>{item.employee}</span></span></td>
+              <td>{item.area}</td><td>{formatDate(item.date, dateFormat)}</td><td><strong>{item.issued}</strong> <span className="muted">containers</span></td>
+              <td><StatusPill kind={isReturned ? "green" : "amber"}>{isReturned ? "Returned" : "In transit"}</StatusPill></td>
+            </tr>;
+            return <tr key={item.id}>
+              <td><span className="table-id">{item.id}</span></td><td>{formatDate(item.date, dateFormat)}</td>
+              <td><span className="person-cell"><Avatar name={item.employee} size="avatar-small" /><span>{item.employee}</span></span></td>
+              <td>{item.container}</td><td>{item.area}</td><td><strong>{item.issued}</strong></td>
+              <td>{item.returned}</td><td>{item.damaged ? <span className="number-alert">{item.damaged}</span> : <span className="muted">—</span>}</td><td>{item.lost ? <span className="number-alert">{item.lost}</span> : <span className="muted">—</span>}</td>
+            </tr>;
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Sales are derived from transaction quantities and filtered to the selected period.
+function SalesPage({ transactions, currency, dateFormat, openNewTransaction }) {
+  const [period, setPeriod] = useState("This month");
+  const sales = transactions.map((item, index) => ({ id: `SL-${2086 - index}`, transaction: item.id, date: item.date, employee: item.employee, containers: item.issued - item.returned, price: item.unitPrice }));
+  const now = new Date();
+  const rangeStart = period === "This year" ? new Date(now.getFullYear(), 0, 1) : period === "Last month" ? new Date(now.getFullYear(), now.getMonth() - 1, 1) : new Date(now.getFullYear(), now.getMonth(), 1);
+  const rangeEnd = period === "This year" ? new Date(now.getFullYear(), 11, 31) : period === "Last month" ? new Date(now.getFullYear(), now.getMonth(), 0) : new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const periodSales = sales.filter((sale) => {
+    const saleDate = new Date(`${sale.date}T00:00:00`);
+    return saleDate >= rangeStart && saleDate <= rangeEnd;
+  });
+  const totalOut = periodSales.reduce((sum, sale) => sum + sale.containers, 0);
+  const periodSalesAmount = periodSales.reduce((sum, sale) => sum + sale.containers * sale.price, 0);
+  const dateLabel = `${formatDate(rangeStart, dateFormat)} – ${formatDate(rangeEnd, dateFormat)}`;
+  return (
+    <>
+      <PageHeading eyebrow="REVENUE & PERFORMANCE" title="Sales" description="A clear picture of your water delivery revenue.">
+        <Button onClick={openNewTransaction}><Plus size={17} /> Record sale</Button>
+      </PageHeading>
+      <div className="sales-toolbar"><label className="filter-select"><CalendarDays size={16} /><select value={period} onChange={(event) => setPeriod(event.target.value)}><option>This month</option><option>Last month</option><option>This year</option></select><ChevronDown size={14} /></label><div className="sales-date-note">{dateLabel}</div></div>
+      <section className="metrics-grid sales-metrics">
+        <MetricCard label="Total sales" value={formatMoney(periodSalesAmount, currency)} icon={Wallet} tone="purple" />
+        <MetricCard label="Containers out" value={totalOut} icon={Package} tone="blue" />
+        <MetricCard label="Number of sales" value={periodSales.length} icon={ShoppingBag} tone="green" />
+      </section>
+      <section className="panel table-panel">
+        <div className="panel-heading table-heading"><div><h2>Recent sales</h2><p>Every sale is linked to its original transaction</p></div></div>
+        <div className="table-scroll"><table className="data-table sales-table"><thead><tr><th>Sale ID</th><th>Date</th><th>Transaction</th><th>Containers out</th><th>Unit price</th><th>Total amount</th><th>Recorded by</th></tr></thead>
+          <tbody>{periodSales.length ? periodSales.map((sale) => <tr key={sale.id}><td><span className="table-id">{sale.id}</span></td><td>{formatDate(sale.date, dateFormat)}</td><td><span className="table-id secondary-id">{sale.transaction}</span></td><td><strong>{sale.containers}</strong> <span className="muted">containers</span></td><td>{formatMoney(sale.price, currency)}</td><td className="money-cell">{formatMoney(sale.containers * sale.price, currency)}</td><td><span className="person-cell"><Avatar name={sale.employee} size="avatar-small" /><span>{sale.employee}</span></span></td></tr>) : <tr><td colSpan="7" className="sales-empty">No sales recorded in this period.</td></tr>}</tbody>
+        </table></div>
+        <div className="sales-note">Sales are based on containers issued minus returns, multiplied by the unit price.</div>
+      </section>
+    </>
+  );
+}
+
+// Master data tabs manage the employee, container, and delivery-area lists.
+function MasterDataPage({ section, setSection, employees, setEmployees, containers, setContainers, currency, defaultOwnership, areas, setAreas, notify }) {
+  return (
+    <>
+      <PageHeading eyebrow="YOUR BUSINESS, YOUR WAY" title="Master data" description="Set up the people, containers and places behind every delivery." />
+      <div className="master-tabs">{["Employees", "Containers", "Delivery areas"].map((item) => {
+        const Icon = item === "Employees" ? Users : item === "Containers" ? Boxes : MapPin;
+        const count = item === "Employees" ? employees.length : item === "Containers" ? containers.length : areas.length;
+        return <button key={item} className={`master-tab ${section === item ? "master-tab-active" : ""}`} onClick={() => setSection(item)}><Icon size={17} />{item}<span>{count}</span></button>;
+      })}</div>
+      {section === "Employees" && <EmployeesMaster employees={employees} setEmployees={setEmployees} notify={notify} />}
+      {section === "Containers" && <ContainersMaster containers={containers} setContainers={setContainers} currency={currency} defaultOwnership={defaultOwnership} notify={notify} />}
+      {section === "Delivery areas" && <AreasMaster areas={areas} setAreas={setAreas} employees={employees} notify={notify} />}
+    </>
+  );
+}
+
+// Each master form keeps its draft local and commits a validated record on submit.
+function EmployeesMaster({ employees, setEmployees, notify }) {
+  const [form, setForm] = useState({ first: "", last: "", phone: "" });
+  const submit = (event) => {
+    event.preventDefault();
+    if (!form.first.trim() || !form.last.trim()) return;
+    setEmployees((current) => [...current, { ...form, id: Date.now() }]);
+    setForm({ first: "", last: "", phone: "" });
+    notify("Employee added successfully");
+  };
+  return <section className="master-content">
+    <div className="master-intro"><span className="master-intro-icon people-intro"><Users size={19} /></span><div><h2>Employees</h2><p>People who make every delivery possible.</p></div></div>
+    <div className="master-columns">
+      <form className="panel form-panel" onSubmit={submit}><div className="form-panel-title"><h3>Add an employee</h3></div><label>First name<input value={form.first} onChange={(event) => setForm({ ...form, first: event.target.value })} placeholder="e.g. Jamie" required /></label><label>Last name<input value={form.last} onChange={(event) => setForm({ ...form, last: event.target.value })} placeholder="e.g. Rivera" required /></label><label>Contact number <span className="optional">(optional)</span><input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="+63 9XX XXX XXXX" /></label><Button type="submit"><Plus size={16} /> Add employee</Button></form>
+      <div className="panel master-list-panel"><div className="list-panel-heading"><div><h3>Your team</h3><p>Manage your delivery staff</p></div><span className="list-count">{employees.length}</span></div><div className="master-list">{employees.map((person) => <div className="master-list-row" key={person.id}><Avatar name={`${person.first} ${person.last}`} /><span className="master-person-name"><strong>{person.first} {person.last}</strong><small>{person.phone || "No contact number"}</small></span></div>)}</div></div>
+    </div>
+  </section>;
+}
+
+function ContainersMaster({ containers, setContainers, currency, defaultOwnership, notify }) {
+  const initialForm = { type: "", ownership: defaultOwnership, status: "Active", price: "" };
+  const [form, setForm] = useState(initialForm);
+  const submit = (event) => {
+    event.preventDefault();
+    if (!form.type.trim() || !form.price) return;
+    setContainers((current) => [...current, { ...form, price: Number(form.price), id: Date.now() }]);
+    setForm(initialForm);
+    notify("Container added successfully");
+  };
+  return <section className="master-content">
+    <div className="master-intro"><span className="master-intro-icon container-intro"><Boxes size={19} /></span><div><h2>Containers</h2><p>Keep track of every container type and its value.</p></div></div>
+    <div className="master-columns">
+      <form className="panel form-panel" onSubmit={submit}><div className="form-panel-title"><h3>Add a container</h3></div><label>Container type<input value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })} placeholder="e.g. 5-gallon jug" required /></label><label>Ownership type<select value={form.ownership} onChange={(event) => setForm({ ...form, ownership: event.target.value })}><option>Company-owned</option><option>Customer-owned</option></select></label><div className="form-two-col"><label>Status<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}><option>Active</option><option>Inactive</option></select></label><label>Unit price<input type="number" min="0" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} placeholder="₱ 0.00" required /></label></div><Button type="submit"><Plus size={16} /> Add container</Button></form>
+      <div className="panel master-list-panel"><div className="list-panel-heading"><div><h3>Container types</h3><p>Pricing and availability</p></div><span className="list-count">{containers.length}</span></div><div className="master-list">{containers.map((item) => <div className="master-list-row container-list-row" key={item.id}><span className="container-list-icon"><Package size={18} /></span><span className="master-person-name"><strong>{item.type}</strong><small>{item.ownership} · {formatMoney(item.price, currency)} / unit</small></span><StatusPill kind={item.status === "Active" ? "green" : "gray"}>{item.status}</StatusPill></div>)}</div></div>
+    </div>
+  </section>;
+}
+
+function AreasMaster({ areas, setAreas, employees, notify }) {
+  const [form, setForm] = useState({ name: "", barangay: "", employee: "" });
+  const submit = (event) => {
+    event.preventDefault();
+    if (!form.name.trim() || !form.barangay.trim()) return;
+    setAreas((current) => [...current, { ...form, id: Date.now(), employee: form.employee || "Not assigned" }]);
+    setForm({ name: "", barangay: "", employee: "" });
+    notify("Delivery area added successfully");
+  };
+  return <section className="master-content">
+    <div className="master-intro"><span className="master-intro-icon area-intro"><MapPin size={19} /></span><div><h2>Delivery areas</h2><p>Organize your routes by neighborhood and barangay.</p></div></div>
+    <div className="master-columns">
+      <form className="panel form-panel" onSubmit={submit}><div className="form-panel-title"><h3>Add a delivery area</h3></div><label>Area name<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="e.g. Riverside" required /></label><label>Barangay<input value={form.barangay} onChange={(event) => setForm({ ...form, barangay: event.target.value })} placeholder="e.g. San Isidro" required /></label><label>Assigned employee <span className="optional">(optional)</span><select value={form.employee} onChange={(event) => setForm({ ...form, employee: event.target.value })}><option value="">Not assigned</option>{employees.map((employee) => <option key={employee.id}>{employee.first} {employee.last}</option>)}</select></label><Button type="submit"><Plus size={16} /> Add delivery area</Button></form>
+      <div className="panel master-list-panel"><div className="list-panel-heading"><div><h3>Your delivery areas</h3><p>Areas and assigned team members</p></div><span className="list-count">{areas.length}</span></div><div className="master-list">{areas.map((area) => <div className="master-list-row area-list-row" key={area.id}><span className="area-list-icon"><MapPin size={17} /></span><span className="master-person-name"><strong>{area.name}</strong><small>{area.barangay} barangay</small></span><span className="area-assignee">{area.employee === "Not assigned" ? <span className="unassigned">Not assigned</span> : <><Avatar name={area.employee} size="avatar-small" />{area.employee}</>}</span></div>)}</div></div>
+    </div>
+  </section>;
+}
+
+// Checks that returned, damaged, and lost quantities do not exceed those issued.
+function TransactionModal({ employees, containers, areas, currency, onClose, onSave }) {
+  const [form, setForm] = useState({
+    date: localInputDate(),
+    employee: employees[0] ? `${employees[0].first} ${employees[0].last}` : "",
+    area: areas[0]?.name || "",
+    container: containers[0]?.type || "",
+    issued: 1,
+  });
+  const [returnLater, setReturnLater] = useState(false);
+  const [returnError, setReturnError] = useState("");
+  const selectedArea = areas.find((area) => area.name === form.area);
+  const selectedContainer = containers.find((item) => item.type === form.container);
+  const updateForm = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+
+  const submit = (event) => {
+    event.preventDefault();
+    if (!form.employee || !form.container || !form.area || Number(form.issued) < 1) return;
+    const accountedFor = returnLater
+      ? Number(form.returned || 0) + Number(form.damaged || 0) + Number(form.lost || 0)
+      : 0;
+    if (accountedFor > Number(form.issued)) {
+      setReturnError("Returned, damaged and lost quantities can’t exceed the quantity issued.");
+      return;
+    }
+    onSave({
+      ...form,
+      issued: Number(form.issued),
+      returned: returnLater ? Number(form.returned || 0) : 0,
+      damaged: returnLater ? Number(form.damaged || 0) : 0,
+      lost: returnLater ? Number(form.lost || 0) : 0,
+      unitPrice: selectedContainer?.price || 0,
+    });
+  };
+
+  return (
+    <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <section className="transaction-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div className="modal-heading"><div><div className="eyebrow">INVENTORY MOVEMENT</div><h2 id="modal-title">New transaction</h2><p>Issue containers to a delivery area.</p></div><button className="icon-button" aria-label="Close dialog" onClick={onClose}><X size={20} /></button></div>
+        <form onSubmit={submit}>
+          <div className="transaction-form-grid">
+            <label>Transaction date<input type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} required /></label>
+            <label>Employee<select value={form.employee} onChange={(event) => updateForm("employee", event.target.value)} required>{employees.map((employee) => <option key={employee.id}>{employee.first} {employee.last}</option>)}</select></label>
+            <label>Delivery area<select value={form.area} onChange={(event) => updateForm("area", event.target.value)} required>{areas.map((area) => <option key={area.id}>{area.name}</option>)}</select><small>{selectedArea ? `${selectedArea.barangay} · ${selectedArea.employee}` : "Choose a delivery area"}</small></label>
+            <label>Container<select value={form.container} onChange={(event) => updateForm("container", event.target.value)} required>{containers.map((item) => <option key={item.id}>{item.type}</option>)}</select><small>{selectedContainer ? `${selectedContainer.ownership} · ${formatMoney(selectedContainer.price, currency)} per unit` : "Choose a container"}</small></label>
+            <label className="issued-field">Quantity issued<input type="number" min="1" value={form.issued} onChange={(event) => { updateForm("issued", event.target.value); setReturnError(""); }} required /></label>
+          </div>
+          <label className="return-toggle"><input type="checkbox" checked={returnLater} onChange={(event) => setReturnLater(event.target.checked)} /><span className="toggle-track" /><span><strong>Record a return now</strong><small>Skip this if containers are still out for delivery.</small></span></label>
+          {returnLater && <div className="return-fields">{[["returned", "Returned"], ["damaged", "Damaged"], ["lost", "Lost"]].map(([key, label]) => <label key={key}>{label}<input type="number" min="0" value={form[key] || 0} onChange={(event) => { updateForm(key, event.target.value); setReturnError(""); }} /></label>)}</div>}
+          {returnError && <p className="form-error" role="alert">{returnError}</p>}
+          <div className="transaction-summary"><span><span className="summary-icon"><Package size={16} /></span><span><strong>{form.issued || 0} containers</strong><small>Estimated sale</small></span></span><strong>{formatMoney((Number(form.issued) || 0) * (selectedContainer?.price || 0), currency)}</strong></div>
+          <div className="modal-actions"><button type="button" className="button button-secondary" onClick={onClose}>Cancel</button><Button type="submit"><Check size={16} /> Save transaction</Button></div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function formatDate(value, format = "MMM d, yyyy") {
+  const date = value instanceof Date ? value : new Date(`${value}T00:00:00`);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  if (format === "dd/MM/yyyy") return `${day}/${month}/${year}`;
+  if (format === "yyyy-MM-dd") return `${year}-${month}-${day}`;
+  return date.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+}
+
+export default App;
