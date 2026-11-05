@@ -255,6 +255,15 @@ h1 {
   background: #f7f9fa;
   border-color: #ccd4d8;
 }
+.button-danger {
+  border-color: #e8c9c5;
+  color: #a33f35;
+  background: #fff;
+}
+.button-danger:hover {
+  border-color: #d7aaa4;
+  background: #fcf1ef;
+}
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -509,6 +518,20 @@ h1 {
 .transactions-table-panel {
   min-height: 210px;
 }
+.pending-panel {
+  margin-bottom: 18px;
+}
+.pending-empty {
+  margin: 0;
+  padding: 18px 19px;
+  color: #858c90;
+  font-size: 11px;
+}
+.pending-complete {
+  min-height: 30px;
+  padding: 0 9px;
+  font-size: 10px;
+}
 .transactions-table-panel .data-table th,
 .transactions-table-panel .data-table td {
   padding-right: 11px;
@@ -522,6 +545,114 @@ h1 {
   padding: 13px 2px;
   color: #898f92;
   font-size: 9px;
+}
+.delivery-confirmation-page {
+  display: grid;
+  gap: 18px;
+}
+.delivery-confirmation-page .page-heading {
+  margin-bottom: 0;
+}
+.delivery-confirmation-panel {
+  padding: 24px;
+}
+.delivery-confirmation-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 19px;
+  border-bottom: 1px solid #edeff0;
+}
+.delivery-confirmation-heading h2 {
+  margin: 6px 0 0;
+  color: #252c30;
+  font-size: 20px;
+}
+.delivery-details {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  padding: 21px 0;
+  border-bottom: 1px solid #edeff0;
+}
+.delivery-details > div {
+  display: grid;
+  gap: 6px;
+}
+.delivery-details span {
+  color: #858c90;
+  font-size: 11px;
+}
+.delivery-details strong {
+  color: #3a4246;
+  font-size: 14px;
+  font-weight: 620;
+}
+.delivery-quantity-section {
+  padding-top: 21px;
+}
+.delivery-quantity-section .settings-section-heading {
+  margin-bottom: 14px;
+}
+.delivery-quantity-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.delivery-quantity-grid label {
+  display: grid;
+  gap: 7px;
+  color: #3a4044;
+  font-size: 12px;
+  font-weight: 600;
+}
+.delivery-quantity-grid input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #dce3e7;
+  border-radius: 7px;
+  outline: 0;
+  color: #363e42;
+  background: #fff;
+  font: inherit;
+  font-weight: 400;
+}
+.delivery-quantity-grid input:focus {
+  border-color: #91aebf;
+  box-shadow: 0 0 0 3px #eaf0f4;
+}
+.delivery-quantity-hint {
+  margin: 10px 0 0;
+  color: #858c90;
+  font-size: 11px;
+}
+.delivery-confirmation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding-top: 20px;
+  margin-top: 22px;
+  border-top: 1px solid #edeff0;
+}
+@media (max-width: 560px) {
+  .delivery-confirmation-panel {
+    padding: 18px;
+  }
+  .delivery-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .delivery-quantity-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .delivery-confirmation-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+  .delivery-confirmation-actions .button {
+    width: 100%;
+  }
 }
 
 .sales-toolbar {
@@ -1453,4 +1584,30 @@ h1 {
  .data-table td {
    font-size: 14px;
  }
+}
+
+.delivery-confirmation-heading .eyebrow,
+.delivery-details > div > span,
+.delivery-quantity-hint {
+  font-size: 13px;
+}
+
+.delivery-confirmation-heading h2 {
+  font-size: 22px;
+}
+
+.delivery-details > div > strong {
+  font-size: 16px;
+}
+
+.delivery-quantity-grid label {
+  font-size: 15px;
+}
+
+.delivery-quantity-grid input {
+  font-size: 16px;
+}
+
+.delivery-confirmation-actions .button {
+  font-size: 15px;
 }

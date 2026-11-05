@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownLeft,
   ArrowDownRight,
@@ -177,7 +177,9 @@ function EmptyState({ icon: Icon, title, text, action }) {
 function App() {
   const [page, setPage] = useState("Dashboard");
   const [masterSection, setMasterSection] = useState("Employees");
-  const [transactions, setTransactions] = useState(initialTransactions);
+  const [deliveryConfirmationId, setDeliveryConfirmationId] = useState(null);
+  const [transactions, setTransactions] = useState(() => loadMasterData("transactions", initialTransactions));
+  const [pendingTransactions, setPendingTransactions] = useState(() => loadMasterData("pending-transactions", []));
   const [employees, setEmployees] = useState(() => loadMasterData("employees", initialEmployees));
   const [containers, setContainers] = useState(() => loadMasterData("containers", initialContainers));
   const [areas, setAreas] = useState(() => loadMasterData("areas", initialAreas));
@@ -188,16 +190,21 @@ function App() {
   const [filters, setFilters] = useState({ employee: "All employees", area: "All areas", container: "All containers" });
   const [appliedFilters, setAppliedFilters] = useState({ employee: "All employees", area: "All areas", container: "All containers" });
   const [toast, setToast] = useState("");
+  const toastTimeout = useRef(null);
 
   useEffect(() => {
     try {
       window.localStorage.setItem("stacey-water-employees", JSON.stringify(employees));
       window.localStorage.setItem("stacey-water-containers", JSON.stringify(containers));
       window.localStorage.setItem("stacey-water-areas", JSON.stringify(areas));
+      window.localStorage.setItem("stacey-water-transactions", JSON.stringify(transactions));
+      window.localStorage.setItem("stacey-water-pending-transactions", JSON.stringify(pendingTransactions));
     } catch (error) {
-      console.error("Unable to save master data.", error);
+      console.error("Unable to save workspace data.", error);
     }
-  }, [employees, containers, areas]);
+  }, [employees, containers, areas, transactions, pendingTransactions]);
+
+  useEffect(() => () => window.clearTimeout(toastTimeout.current), []);
 
   const activeTransactions = useMemo(() => {
     const employeeNames = new Set(employees.map((employee) => `${employee.first} ${employee.last}`));
@@ -225,8 +232,9 @@ function App() {
 
   const openNewTransaction = () => setShowTransaction(true);
   const notify = (message) => {
+    window.clearTimeout(toastTimeout.current);
     setToast(message);
-    window.setTimeout(() => setToast(""), 3200);
+    toastTimeout.current = window.setTimeout(() => setToast(""), 3200);
   };
 
   const saveSettings = (updatedSettings) => {
@@ -245,16 +253,66 @@ function App() {
     }
   };
 
+  const resetWorkspaceData = () => {
+    try {
+      const emptyList = JSON.stringify([]);
+      window.localStorage.setItem("stacey-water-employees", emptyList);
+      window.localStorage.setItem("stacey-water-containers", emptyList);
+      window.localStorage.setItem("stacey-water-areas", emptyList);
+      window.localStorage.setItem("stacey-water-transactions", emptyList);
+      window.localStorage.setItem("stacey-water-pending-transactions", emptyList);
+      window.localStorage.removeItem("stacey-water-settings");
+      setEmployees([]);
+      setContainers([]);
+      setAreas([]);
+      setTransactions([]);
+      setPendingTransactions([]);
+      setSettings({ ...defaultSettings });
+      notify("All workspace data has been reset");
+      return true;
+    } catch (error) {
+      console.error("Unable to reset workspace data.", error);
+      notify("Workspace data could not be reset. Please try again.");
+      return false;
+    }
+  };
+
   // Add a saved transaction to the front of the activity list and notify the user.
   const saveTransaction = (values) => {
+    const nextTransactionNumber = [...transactions, ...pendingTransactions].reduce((highest, item) => {
+      const number = Number(item.id.replace("TR-", ""));
+      return Number.isFinite(number) ? Math.max(highest, number) : highest;
+    }, 1048) + 1;
     const newItem = {
       ...values,
-      id: `TR-${1049 + transactions.length - initialTransactions.length}`,
+      id: `TR-${nextTransactionNumber}`,
     };
-    setTransactions((current) => [newItem, ...current]);
+    setPendingTransactions((current) => [newItem, ...current]);
     setShowTransaction(false);
     setPage("Transactions");
-    notify("Transaction recorded successfully");
+    notify("Delivery added to pending");
+  };
+
+  const openDeliveryConfirmation = (item) => {
+    setDeliveryConfirmationId(item.id);
+    setPage("Delivery confirmation");
+  };
+
+  const completeDelivery = (item) => {
+    const accountedFor = Number(item.returned || 0) + Number(item.damaged || 0) + Number(item.lost || 0);
+    if (accountedFor > Number(item.issued)) {
+      return "Returned, damaged and lost quantities can’t exceed the quantity issued.";
+    }
+    setPendingTransactions((current) => current.filter((transaction) => transaction.id !== item.id));
+    setTransactions((current) => [item, ...current]);
+    setSearch("");
+    const allFilters = { employee: "All employees", area: "All areas", container: "All containers" };
+    setFilters(allFilters);
+    setAppliedFilters(allFilters);
+    setDeliveryConfirmationId(null);
+    setPage("Transactions");
+    notify("Delivery confirmed and saved to transaction history");
+    return null;
   };
 
   const handleNav = (id) => {
@@ -263,6 +321,7 @@ function App() {
   };
 
   const pageTitle = page === "Master data" ? masterSection : page;
+  const deliveryForConfirmation = pendingTransactions.find((item) => item.id === deliveryConfirmationId);
 
   return (
     <div className="app-shell">
@@ -272,7 +331,7 @@ function App() {
           {navItems.map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => handleNav(id)} className={`nav-link ${page === id ? "nav-active" : ""}`}>
               <Icon size={18} strokeWidth={1.8} /><span>{label}</span>
-              {id === "Transactions" && <span className="nav-count">{transactions.length}</span>}
+              {id === "Transactions" && <span className="nav-count">{pendingTransactions.length}</span>}
             </button>
           ))}
         </nav>
@@ -295,6 +354,7 @@ function App() {
           {page === "Dashboard" && <DashboardPage transactions={activeTransactions} totalIssued={totalIssued} totalReturned={totalReturned} totalSales={totalSales} currency={settings.currency} dateFormat={settings.dateFormat} setPage={setPage} />}
           {page === "Transactions" && <TransactionsPage
             transactions={filteredTransactions}
+            pendingTransactions={pendingTransactions}
             allTransactions={transactions}
             totalCount={transactions.length}
             employees={employees}
@@ -306,9 +366,18 @@ function App() {
             search={search}
             setSearch={setSearch}
             openNewTransaction={openNewTransaction}
+            onConfirmDelivery={openDeliveryConfirmation}
             dateFormat={settings.dateFormat}
           />}
-          {page === "Sales" && <SalesPage transactions={activeTransactions} currency={settings.currency} dateFormat={settings.dateFormat} openNewTransaction={openNewTransaction} />}
+          {page === "Sales" && <SalesPage transactions={activeTransactions} currency={settings.currency} dateFormat={settings.dateFormat} />}
+          {page === "Delivery confirmation" && deliveryForConfirmation && <DeliveryConfirmationPage
+            transaction={deliveryForConfirmation}
+            dateFormat={settings.dateFormat}
+            currency={settings.currency}
+            onBack={() => { setDeliveryConfirmationId(null); setPage("Transactions"); }}
+            onConfirm={completeDelivery}
+          />}
+          {page === "Delivery confirmation" && !deliveryForConfirmation && <EmptyState icon={Search} title="Pending delivery not found" text="This delivery may already have been confirmed." action={<Button onClick={() => setPage("Transactions")}>Back to transactions</Button>} />}
           {page === "Master data" && <MasterDataPage
             section={masterSection}
             setSection={setMasterSection}
@@ -322,7 +391,7 @@ function App() {
             setAreas={setAreas}
             notify={notify}
           />}
-          {page === "Settings" && <SettingsPage settings={settings} onSave={saveSettings} />}
+          {page === "Settings" && <SettingsPage settings={settings} onSave={saveSettings} onResetData={resetWorkspaceData} />}
         </div>
       </main>
 
@@ -374,7 +443,7 @@ function DashboardPage({ transactions, totalIssued, totalReturned, totalSales, c
 }
 
 // Provides transaction search, staged filters, and an empty state when nothing matches.
-function TransactionsPage({ transactions, allTransactions, totalCount, employees, areas, containers, filters, setFilters, setAppliedFilters, search, setSearch, openNewTransaction, dateFormat }) {
+function TransactionsPage({ transactions, pendingTransactions, allTransactions, totalCount, employees, areas, containers, filters, setFilters, setAppliedFilters, search, setSearch, openNewTransaction, onConfirmDelivery, dateFormat }) {
   const employeeOptions = [...new Set([...employees.map((employee) => `${employee.first} ${employee.last}`), ...allTransactions.map((item) => item.employee)])];
   const areaOptions = [...new Set([...areas.map((area) => area.name), ...allTransactions.map((item) => item.area)])];
   const containerOptions = [...new Set([...containers.map((item) => item.type), ...allTransactions.map((item) => item.container)])];
@@ -383,6 +452,19 @@ function TransactionsPage({ transactions, allTransactions, totalCount, employees
       <PageHeading eyebrow="INVENTORY MOVEMENT" title="Transactions" description="Track every container as it moves through your business.">
         <Button onClick={openNewTransaction}><Plus size={17} /> New transaction</Button>
       </PageHeading>
+      <section className="panel table-panel pending-panel">
+        <div className="panel-heading table-heading">
+          <div><h2>Pending deliveries</h2><p>Mark a delivery complete to add it to transaction history.</p></div>
+          <span className="list-count">{pendingTransactions.length}</span>
+        </div>
+        {pendingTransactions.length
+          ? <TransactionTable
+            transactions={pendingTransactions}
+            dateFormat={dateFormat}
+            onComplete={onConfirmDelivery}
+          />
+          : <p className="pending-empty">No pending deliveries.</p>}
+      </section>
       <section className="filter-toolbar">
         <div className="search-field"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search transactions..." /></div>
         <label className="filter-select"><select value={filters.employee} onChange={(event) => setFilters({ ...filters, employee: event.target.value })}><option>All employees</option>{employeeOptions.map((name) => <option key={name}>{name}</option>)}</select><ChevronDown size={15} /></label>
@@ -399,12 +481,95 @@ function TransactionsPage({ transactions, allTransactions, totalCount, employees
   );
 }
 
-function SettingsPage({ settings, onSave }) {
+function DeliveryConfirmationPage({ transaction, dateFormat, currency, onBack, onConfirm }) {
+  const [quantities, setQuantities] = useState({
+    returned: String(transaction.returned ?? 0),
+    damaged: String(transaction.damaged ?? 0),
+    lost: String(transaction.lost ?? 0),
+  });
+  const [error, setError] = useState("");
+
+  const updateQuantity = (field, value) => {
+    setQuantities((current) => ({ ...current, [field]: value }));
+    setError("");
+  };
+
+  const submit = (event) => {
+    event.preventDefault();
+    const updatedTransaction = {
+      ...transaction,
+      returned: Number(quantities.returned),
+      damaged: Number(quantities.damaged),
+      lost: Number(quantities.lost),
+    };
+    const validationError = onConfirm(updatedTransaction);
+    if (validationError) setError(validationError);
+  };
+
+  return (
+    <section className="delivery-confirmation-page">
+      <PageHeading eyebrow="DELIVERY COMPLETION" title="Confirm successful delivery" description="Review this transaction and enter the final container counts.">
+        <Button type="button" variant="secondary" onClick={onBack}>Back to transactions</Button>
+      </PageHeading>
+      <form className="panel delivery-confirmation-panel" onSubmit={submit}>
+        <div className="delivery-confirmation-heading">
+          <div><span className="eyebrow">CURRENT TRANSACTION</span><h2>{transaction.id}</h2></div>
+          <span className="status-pill status-amber">Pending delivery</span>
+        </div>
+        <div className="delivery-details">
+          <div><span>Employee</span><strong>{transaction.employee}</strong></div>
+          <div><span>Delivery area</span><strong>{transaction.area}</strong></div>
+          <div><span>Container</span><strong>{transaction.container}</strong></div>
+          <div><span>Delivery date</span><strong>{formatDate(transaction.date, dateFormat)}</strong></div>
+          <div><span>Quantity issued</span><strong>{transaction.issued}</strong></div>
+          <div><span>Unit price</span><strong>{formatMoney(transaction.unitPrice, currency)}</strong></div>
+        </div>
+        <div className="delivery-quantity-section">
+          <div className="settings-section-heading">
+            <h2>Delivery results</h2>
+            <p>Enter the quantities returned, damaged, or lost for this delivery.</p>
+          </div>
+          <div className="delivery-quantity-grid">
+            {[
+              ["returned", "Returned"],
+              ["damaged", "Damaged"],
+              ["lost", "Lost"],
+            ].map(([field, label]) => (
+              <label key={field}>{label}
+                <input
+                  type="number"
+                  min="0"
+                  max={transaction.issued}
+                  step="1"
+                  required
+                  value={quantities[field]}
+                  onChange={(event) => updateQuantity(field, event.target.value)}
+                />
+              </label>
+            ))}
+          </div>
+          <p className="delivery-quantity-hint">The combined quantity cannot exceed {transaction.issued} issued containers.</p>
+        </div>
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <div className="delivery-confirmation-actions">
+          <Button type="button" variant="secondary" onClick={onBack}>Cancel</Button>
+          <Button type="submit"><Check size={16} /> Confirm successful delivery</Button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function SettingsPage({ settings, onSave, onResetData }) {
   const [form, setForm] = useState(settings);
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   const submit = (event) => {
     event.preventDefault();
     onSave({ ...form, businessName: form.businessName.trim() });
+  };
+  const resetData = () => {
+    const confirmed = window.confirm("Reset all workspace data? This permanently deletes employees, containers, delivery areas, pending deliveries, transaction history, and saved settings.");
+    if (confirmed && onResetData()) setForm({ ...defaultSettings });
   };
 
   return (
@@ -467,31 +632,40 @@ function SettingsPage({ settings, onSave }) {
           </label>
         </div>
       </section>
+      <section className="panel settings-section reset-section">
+        <div className="settings-section-heading">
+          <h2>Reset workspace data</h2>
+          <p>Permanently delete all records and restore settings to their defaults.</p>
+        </div>
+        <button type="button" className="button button-danger" onClick={resetData}><Trash2 size={16} /> Reset all data</button>
+      </section>
       <div className="settings-actions"><Button type="submit"><Check size={16} /> Save settings</Button></div>
     </form>
   );
 }
 
 // Supports a compact dashboard table and a detailed transaction ledger.
-function TransactionTable({ transactions, compact = false, dateFormat }) {
+function TransactionTable({ transactions, compact = false, dateFormat, onComplete }) {
   return (
     <div className="table-scroll">
       <table className={compact ? "data-table compact-table" : "data-table"}>
-        <thead><tr>{(compact ? ["Transaction", "Employee", "Delivery area", "Date", "Containers", "Status"] : ["Transaction", "Date", "Employee", "Container", "Delivery area", "Issued", "Returned", "Damaged", "Lost"]).map((label) => <th key={label}>{label}</th>)}</tr></thead>
+        <thead><tr>{(compact ? ["Transaction", "Employee", "Delivery area", "Date", "Containers", "Status"] : ["Transaction", "Date", "Employee", "Container", "Delivery area", "Issued", "Returned", "Damaged", "Lost", ...(onComplete ? ["Action"] : [])]).map((label) => <th key={label}>{label}</th>)}</tr></thead>
         <tbody>
           {transactions.map((item) => {
-            const isReturned = item.returned > 0;
             if (compact) return <tr key={item.id}>
               <td><span className="table-id">{item.id}</span></td>
               <td><span className="person-cell">{item.employee}</span></td>
               <td>{item.area}</td><td>{formatDate(item.date, dateFormat)}</td><td><strong>{item.issued}</strong></td>
-              <td><StatusPill kind={isReturned ? "green" : "amber"}>{isReturned ? "Returned" : "In transit"}</StatusPill></td>
+              <td><StatusPill kind="green">Delivered</StatusPill></td>
             </tr>;
             return <tr key={item.id}>
               <td><span className="table-id">{item.id}</span></td><td>{formatDate(item.date, dateFormat)}</td>
               <td><span className="person-cell">{item.employee}</span></td>
               <td>{item.container}</td><td>{item.area}</td><td><strong>{item.issued}</strong></td>
-              <td>{item.returned}</td><td>{item.damaged ? <span className="number-alert">{item.damaged}</span> : <span className="muted">—</span>}</td><td>{item.lost ? <span className="number-alert">{item.lost}</span> : <span className="muted">—</span>}</td>
+              <td>{item.returned}</td>
+              <td>{item.damaged ? <span className="number-alert">{item.damaged}</span> : <span className="muted">—</span>}</td>
+              <td>{item.lost ? <span className="number-alert">{item.lost}</span> : <span className="muted">—</span>}</td>
+              {onComplete && <td><button type="button" className="button button-secondary pending-complete" onClick={() => onComplete(item)}>Confirm delivery</button></td>}
             </tr>;
           })}
         </tbody>
@@ -501,9 +675,11 @@ function TransactionTable({ transactions, compact = false, dateFormat }) {
 }
 
 // Sales are derived from transaction quantities and filtered to the selected period.
-function SalesPage({ transactions, currency, dateFormat, openNewTransaction }) {
+function SalesPage({ transactions, currency, dateFormat }) {
   const [period, setPeriod] = useState("This month");
-  const sales = transactions.map((item, index) => ({ id: `SL-${2086 - index}`, transaction: item.id, date: item.date, employee: item.employee, containers: item.issued - item.returned, price: item.unitPrice }));
+  const sales = transactions
+    .map((item) => ({ id: `SL-${item.id.replace("TR-", "")}`, transaction: item.id, date: item.date, employee: item.employee, containers: item.issued - item.returned, price: item.unitPrice }))
+    .filter((sale) => sale.containers > 0);
   const now = new Date();
   const rangeStart = period === "This year" ? new Date(now.getFullYear(), 0, 1) : period === "Last month" ? new Date(now.getFullYear(), now.getMonth() - 1, 1) : new Date(now.getFullYear(), now.getMonth(), 1);
   const rangeEnd = period === "This year" ? new Date(now.getFullYear(), 11, 31) : period === "Last month" ? new Date(now.getFullYear(), now.getMonth(), 0) : new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -516,9 +692,7 @@ function SalesPage({ transactions, currency, dateFormat, openNewTransaction }) {
   const dateLabel = `${formatDate(rangeStart, dateFormat)} – ${formatDate(rangeEnd, dateFormat)}`;
   return (
     <>
-      <PageHeading eyebrow="REVENUE & PERFORMANCE" title="Sales" description="A clear picture of your water delivery revenue.">
-        <Button onClick={openNewTransaction}><Plus size={17} /> Record sale</Button>
-      </PageHeading>
+      <PageHeading eyebrow="REVENUE & PERFORMANCE" title="Sales" description="Sales are recorded automatically when a delivery is confirmed, based on containers issued minus returns." />
       <div className="sales-toolbar"><label className="filter-select"><CalendarDays size={16} /><select value={period} onChange={(event) => setPeriod(event.target.value)}><option>This month</option><option>Last month</option><option>This year</option></select><ChevronDown size={14} /></label><div className="sales-date-note">{dateLabel}</div></div>
       <section className="metrics-grid sales-metrics">
         <MetricCard label="Total sales" value={formatMoney(periodSalesAmount, currency)} icon={Wallet} tone="purple" />
@@ -637,18 +811,19 @@ function TransactionModal({ employees, containers, areas, currency, onClose, onS
     date: localInputDate(),
     employee: employees[0] ? `${employees[0].first} ${employees[0].last}` : "",
     area: areas[0]?.name || "",
-    container: containers[0]?.type || "",
+    containerId: containers[0] ? String(containers[0].id) : "",
     issued: 1,
   });
   const [returnLater, setReturnLater] = useState(false);
   const [returnError, setReturnError] = useState("");
   const selectedArea = areas.find((area) => area.name === form.area);
-  const selectedContainer = containers.find((item) => item.type === form.container);
+  // Container types can repeat with different ownership and prices, so select by record ID.
+  const selectedContainer = containers.find((item) => String(item.id) === form.containerId);
   const updateForm = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
   const submit = (event) => {
     event.preventDefault();
-    if (!form.employee || !form.container || !form.area || Number(form.issued) < 1) return;
+    if (!form.employee || !selectedContainer || !form.area || Number(form.issued) < 1) return;
     const accountedFor = returnLater
       ? Number(form.returned || 0) + Number(form.damaged || 0) + Number(form.lost || 0)
       : 0;
@@ -657,7 +832,10 @@ function TransactionModal({ employees, containers, areas, currency, onClose, onS
       return;
     }
     onSave({
-      ...form,
+      date: form.date,
+      employee: form.employee,
+      area: form.area,
+      container: selectedContainer.type,
       issued: Number(form.issued),
       returned: returnLater ? Number(form.returned || 0) : 0,
       damaged: returnLater ? Number(form.damaged || 0) : 0,
@@ -675,13 +853,19 @@ function TransactionModal({ employees, containers, areas, currency, onClose, onS
             <label>Transaction date<input type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} required /></label>
             <label>Employee<select value={form.employee} onChange={(event) => updateForm("employee", event.target.value)} required><option value="" disabled>Select an employee</option>{employees.map((employee) => <option key={employee.id}>{employee.first} {employee.last}</option>)}</select></label>
             <label>Delivery area<select value={form.area} onChange={(event) => updateForm("area", event.target.value)} required><option value="" disabled>Select a delivery area</option>{areas.map((area) => <option key={area.id}>{area.name}</option>)}</select><small>{selectedArea ? `${selectedArea.barangay} · ${selectedArea.employee}` : "Choose a delivery area"}</small></label>
-            <label>Container<select value={form.container} onChange={(event) => updateForm("container", event.target.value)} required><option value="" disabled>Select a container</option>{containers.map((item) => <option key={item.id}>{item.type}</option>)}</select><small>{selectedContainer ? `${selectedContainer.ownership} · ${formatMoney(selectedContainer.price, currency)} per unit` : "Choose a container"}</small></label>
+            <label>Container<select value={form.containerId} onChange={(event) => updateForm("containerId", event.target.value)} required><option value="" disabled>Select a container</option>{containers.map((item) => <option key={item.id} value={item.id}>{item.type} · {item.ownership}</option>)}</select><small>{selectedContainer ? `${selectedContainer.ownership} · ${formatMoney(selectedContainer.price, currency)} per unit` : "Choose a container"}</small></label>
             <label className="issued-field">Quantity issued<input type="number" min="1" value={form.issued} onChange={(event) => { updateForm("issued", event.target.value); setReturnError(""); }} required /></label>
           </div>
           <label className="return-toggle"><input type="checkbox" checked={returnLater} onChange={(event) => setReturnLater(event.target.checked)} /><span className="toggle-track" /><span><strong>Record a return now</strong><small>Skip this if containers are still out for delivery.</small></span></label>
           {returnLater && <div className="return-fields">{[["returned", "Returned"], ["damaged", "Damaged"], ["lost", "Lost"]].map(([key, label]) => <label key={key}>{label}<input type="number" min="0" value={form[key] || 0} onChange={(event) => { updateForm(key, event.target.value); setReturnError(""); }} /></label>)}</div>}
           {returnError && <p className="form-error" role="alert">{returnError}</p>}
-          <div className="transaction-summary"><span><span className="summary-icon"><Package size={16} /></span><span><strong>{form.issued || 0} containers</strong><small>Estimated sale</small></span></span><strong>{formatMoney((Number(form.issued) || 0) * (selectedContainer?.price || 0), currency)}</strong></div>
+          <div className="transaction-summary">
+            <span><span className="summary-icon"><Package size={16} /></span><span><strong>{form.issued || 0} containers</strong><small>Estimated sale after returns</small></span></span>
+            <strong>{formatMoney(
+              Math.max(0, (Number(form.issued) || 0) - (returnLater ? Number(form.returned || 0) : 0)) * (selectedContainer?.price || 0),
+              currency,
+            )}</strong>
+          </div>
           <div className="modal-actions"><button type="button" className="button button-secondary" onClick={onClose}>Cancel</button><Button type="submit"><Check size={16} /> Save transaction</Button></div>
         </form>
       </section>
