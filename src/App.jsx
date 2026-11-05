@@ -484,7 +484,7 @@ function App() {
         <header className="topbar">
           <div className="topbar-left">
             <button className="mobile-menu icon-button" onClick={() => setSidebarOpen(true)} aria-label="Open menu"><Menu size={21} /></button>
-            <div className="breadcrumbs"><span>Workspace</span><ChevronRight size={14} /><strong>{pageTitle}</strong></div>
+            <div className="breadcrumbs"><span className="workspace-breadcrumb">Workspace</span><ChevronRight size={14} /><strong>{pageTitle}</strong></div>
           </div>
         </header>
 

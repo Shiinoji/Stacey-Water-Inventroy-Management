@@ -172,6 +172,13 @@ select:focus-visible {
   color: #9aa0a3;
   font-size: 11px;
 }
+.workspace-breadcrumb {
+  color: #343b3f;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.2;
+}
 .breadcrumbs strong {
   color: #3a4044;
   font-weight: 600;
@@ -1680,6 +1687,19 @@ h1 {
  font-size: 16px;
 }
 
+.breadcrumbs {
+ font-size: 14px;
+ line-height: 1.2;
+}
+
+.breadcrumbs strong {
+ font-size: 15px;
+}
+
+.workspace-breadcrumb {
+ font-size: 14px;
+}
+
 .button,
 .heading-actions .button,
 .transaction-modal .button,
@@ -1750,6 +1770,14 @@ h1 {
  .form-panel > label,
  .transaction-form-grid > label {
    font-size: 15px;
+ }
+
+ .breadcrumbs {
+   font-size: 12px;
+ }
+
+ .breadcrumbs strong {
+   font-size: 13px;
  }
 
  h1 {
