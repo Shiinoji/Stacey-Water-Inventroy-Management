@@ -21,6 +21,7 @@ import {
   Settings2,
   ShoppingBag,
   Trash2,
+  Upload,
   Users,
   Wallet,
   X,
@@ -84,6 +85,51 @@ const settingOptions = {
   dateFormat: ["MMM d, yyyy", "dd/MM/yyyy", "yyyy-MM-dd"],
   defaultOwnership: ["Company-owned", "Customer-owned"],
 };
+
+// Ensures a selected JSON file has the shape expected by the backup importer.
+function isWorkspaceBackup(value) {
+  const isObject = (item) => item !== null && typeof item === "object" && !Array.isArray(item);
+  const isText = (item) => typeof item === "string";
+  const isNumber = (item) => typeof item === "number" && Number.isFinite(item);
+  const hasValidSettings = (item) => isObject(item) &&
+    Object.keys(defaultSettings).every((key) => (
+      typeof item[key] === "string" &&
+      (settingOptions[key] ? settingOptions[key].includes(item[key]) : true)
+    )) &&
+    item.businessName.trim().length > 0;
+  const hasValidEmployees = (items) => Array.isArray(items) && items.every((item) =>
+    isObject(item) && isNumber(item.id) && isText(item.first) && isText(item.last) && isText(item.phone)
+  );
+  const hasValidContainers = (items) => Array.isArray(items) && items.every((item) =>
+    isObject(item) && isNumber(item.id) && isText(item.type) &&
+    ["Company-owned", "Customer-owned"].includes(item.ownership) &&
+    ["Active", "Inactive"].includes(item.status) && isNumber(item.price) && item.price >= 0
+  );
+  const hasValidAreas = (items) => Array.isArray(items) && items.every((item) =>
+    isObject(item) && isNumber(item.id) && isText(item.name) &&
+    isText(item.barangay) && isText(item.employee)
+  );
+  const hasValidTransactions = (items) => Array.isArray(items) && items.every((item) =>
+    isObject(item) && isText(item.id) && isText(item.date) &&
+    !Number.isNaN(new Date(`${item.date}T00:00:00`).getTime()) &&
+    isText(item.employee) && isText(item.container) && isText(item.area) &&
+    isNumber(item.issued) && item.issued >= 1 &&
+    isNumber(item.returned) && item.returned >= 0 &&
+    isNumber(item.damaged) && item.damaged >= 0 &&
+    isNumber(item.lost) && item.lost >= 0 &&
+    item.returned + item.damaged + item.lost <= item.issued &&
+    isNumber(item.unitPrice) && item.unitPrice >= 0
+  );
+
+  return isObject(value) &&
+    value.version === 1 &&
+    hasValidSettings(value.businessSettings) &&
+    hasValidEmployees(value.employees) &&
+    hasValidContainers(value.containers) &&
+    hasValidAreas(value.deliveryAreas) &&
+    hasValidTransactions(value.transactionHistory) &&
+    hasValidTransactions(value.pendingDeliveries);
+}
 
 // Reads saved business settings and validates them against the supported options.
 function loadSettings() {
@@ -194,6 +240,7 @@ function App() {
   const [areas, setAreas] = useState(() => loadMasterData("areas", initialAreas));
   const [settings, setSettings] = useState(loadSettings);
   const [showTransaction, setShowTransaction] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({ employee: "All employees", area: "All areas", container: "All containers" });
@@ -229,6 +276,10 @@ function App() {
   // Totals are calculated from transactions that still match current master data.
   const totalIssued = activeTransactions.reduce((sum, item) => sum + item.issued, 0);
   const totalReturned = activeTransactions.reduce((sum, item) => sum + item.returned, 0);
+  const totalStillOut = activeTransactions.reduce(
+    (sum, item) => sum + item.issued - item.returned - item.damaged - item.lost,
+    0,
+  );
   const totalSales = activeTransactions.reduce((sum, item) => sum + (item.issued - item.returned) * item.unitPrice, 0);
 
   // Search is immediate; the selected dropdown filters apply on user action.
@@ -242,6 +293,10 @@ function App() {
 
   // Opens the form for recording a new delivery.
   const openNewTransaction = () => setShowTransaction(true);
+  // Opens the summary for a transaction selected from a table.
+  const openTransactionSummary = (transaction, pending = false) => {
+    setSelectedTransaction({ transaction, pending });
+  };
 
   // Shows a temporary toast message, replacing any message already on screen.
   const notify = (message) => {
@@ -294,6 +349,38 @@ function App() {
     } catch (error) {
       console.error("Unable to export workspace data.", error);
       notify("Workspace backup could not be downloaded. Please try again.");
+    }
+  };
+
+  // Replaces the current workspace with a backup already validated by SettingsPage.
+  const importWorkspaceData = (backup) => {
+    try {
+      const importedSettings = {
+        ...backup.businessSettings,
+        businessName: backup.businessSettings.businessName.trim(),
+      };
+      window.localStorage.setItem("stacey-water-employees", JSON.stringify(backup.employees));
+      window.localStorage.setItem("stacey-water-containers", JSON.stringify(backup.containers));
+      window.localStorage.setItem("stacey-water-areas", JSON.stringify(backup.deliveryAreas));
+      window.localStorage.setItem("stacey-water-transactions", JSON.stringify(backup.transactionHistory));
+      window.localStorage.setItem("stacey-water-pending-transactions", JSON.stringify(backup.pendingDeliveries));
+      window.localStorage.setItem("stacey-water-settings", JSON.stringify(importedSettings));
+      setEmployees(backup.employees);
+      setContainers(backup.containers);
+      setAreas(backup.deliveryAreas);
+      setTransactions(backup.transactionHistory);
+      setPendingTransactions(backup.pendingDeliveries);
+      setSettings(importedSettings);
+      setSearch("");
+      const allFilters = { employee: "All employees", area: "All areas", container: "All containers" };
+      setFilters(allFilters);
+      setAppliedFilters(allFilters);
+      notify("Workspace backup imported successfully");
+      return true;
+    } catch (error) {
+      console.error("Unable to import workspace backup.", error);
+      notify("Workspace backup could not be imported. Check your browser storage and try again.");
+      return false;
     }
   };
 
@@ -402,7 +489,7 @@ function App() {
         </header>
 
         <div className="page-content">
-          {page === "Dashboard" && <DashboardPage transactions={activeTransactions} totalIssued={totalIssued} totalReturned={totalReturned} totalSales={totalSales} currency={settings.currency} dateFormat={settings.dateFormat} setPage={setPage} />}
+          {page === "Dashboard" && <DashboardPage transactions={activeTransactions} totalIssued={totalIssued} totalReturned={totalReturned} totalStillOut={totalStillOut} totalSales={totalSales} currency={settings.currency} dateFormat={settings.dateFormat} setPage={setPage} onViewTransaction={openTransactionSummary} />}
           {page === "Transactions" && <TransactionsPage
             transactions={filteredTransactions}
             pendingTransactions={pendingTransactions}
@@ -418,6 +505,7 @@ function App() {
             setSearch={setSearch}
             openNewTransaction={openNewTransaction}
             onConfirmDelivery={openDeliveryConfirmation}
+            onViewTransaction={openTransactionSummary}
             dateFormat={settings.dateFormat}
           />}
           {page === "Sales" && <SalesPage transactions={activeTransactions} currency={settings.currency} dateFormat={settings.dateFormat} />}
@@ -442,7 +530,7 @@ function App() {
             setAreas={setAreas}
             notify={notify}
           />}
-          {page === "Settings" && <SettingsPage settings={settings} onSave={saveSettings} onResetData={resetWorkspaceData} onExportData={exportWorkspaceData} />}
+          {page === "Settings" && <SettingsPage settings={settings} onSave={saveSettings} onResetData={resetWorkspaceData} onExportData={exportWorkspaceData} onImportData={importWorkspaceData} notify={notify} />}
         </div>
       </main>
 
@@ -453,6 +541,13 @@ function App() {
         currency={settings.currency}
         onClose={() => setShowTransaction(false)}
         onSave={saveTransaction}
+      />}
+      {selectedTransaction && <TransactionSummaryModal
+        transaction={selectedTransaction.transaction}
+        pending={selectedTransaction.pending}
+        currency={settings.currency}
+        dateFormat={settings.dateFormat}
+        onClose={() => setSelectedTransaction(null)}
       />}
       {toast && <div className="toast"><span><Check size={16} /></span>{toast}</div>}
     </div>
@@ -470,31 +565,31 @@ function PageHeading({ eyebrow, title, description, children }) {
 }
 
 // The dashboard highlights current totals and recent transaction activity.
-function DashboardPage({ transactions, totalIssued, totalReturned, totalSales, currency, dateFormat, setPage }) {
+function DashboardPage({ transactions, totalIssued, totalReturned, totalStillOut, totalSales, currency, dateFormat, setPage, onViewTransaction }) {
   return (
-    <>
+    <div className="dashboard-page">
       <PageHeading eyebrow={formatDate(new Date(), dateFormat).toUpperCase()} title="Dashboard" description="A clear snapshot of your inventory and delivery activity." />
 
-      <section className="metrics-grid">
+      <section className="metrics-grid dashboard-metrics">
         <MetricCard label="Containers issued" value={totalIssued} icon={Package} tone="blue" />
         <MetricCard label="Containers returned" value={totalReturned} icon={ArrowDownLeft} tone="green" />
-        <MetricCard label="Still out" value={totalIssued - totalReturned} icon={ArrowDownRight} tone="amber" />
+        <MetricCard label="Still out" value={totalStillOut} icon={ArrowDownRight} tone="amber" />
         <MetricCard label="Recorded sales" value={formatMoney(totalSales, currency)} icon={Wallet} tone="purple" />
       </section>
 
-      <section className="panel table-panel">
+      <section className="panel table-panel dashboard-activity">
         <div className="panel-heading table-heading">
           <div><h2>Recent activity</h2><p>Your latest container movements</p></div>
           <button className="text-link" onClick={() => setPage("Transactions")}>View all transactions <ArrowRight size={15} /></button>
         </div>
-        <TransactionTable transactions={transactions.slice(0, 5)} compact dateFormat={dateFormat} />
+        <TransactionTable transactions={transactions.slice(0, 5)} compact dateFormat={dateFormat} onViewTransaction={onViewTransaction} />
       </section>
-    </>
+    </div>
   );
 }
 
 // Provides transaction search, staged filters, and an empty state when nothing matches.
-function TransactionsPage({ transactions, pendingTransactions, allTransactions, totalCount, employees, areas, containers, filters, setFilters, setAppliedFilters, search, setSearch, openNewTransaction, onConfirmDelivery, dateFormat }) {
+function TransactionsPage({ transactions, pendingTransactions, allTransactions, totalCount, employees, areas, containers, filters, setFilters, setAppliedFilters, search, setSearch, openNewTransaction, onConfirmDelivery, onViewTransaction, dateFormat }) {
   const employeeOptions = [...new Set([...employees.map((employee) => `${employee.first} ${employee.last}`), ...allTransactions.map((item) => item.employee)])];
   const areaOptions = [...new Set([...areas.map((area) => area.name), ...allTransactions.map((item) => item.area)])];
   const containerOptions = [...new Set([...containers.map((item) => item.type), ...allTransactions.map((item) => item.container)])];
@@ -513,6 +608,7 @@ function TransactionsPage({ transactions, pendingTransactions, allTransactions, 
             transactions={pendingTransactions}
             dateFormat={dateFormat}
             onComplete={onConfirmDelivery}
+            onViewTransaction={onViewTransaction}
           />
           : <p className="pending-empty">No pending deliveries.</p>}
       </section>
@@ -525,7 +621,7 @@ function TransactionsPage({ transactions, pendingTransactions, allTransactions, 
       </section>
       <div className="result-caption"><strong>{transactions.length}</strong> matching transactions</div>
       <section className="panel table-panel transactions-table-panel">
-        {transactions.length ? <TransactionTable transactions={transactions} dateFormat={dateFormat} /> : <EmptyState icon={Search} title="No transactions found" text="Try changing your search or filters to find what you’re looking for." action={<button className="text-link" onClick={() => { setSearch(""); setFilters({ employee: "All employees", area: "All areas", container: "All containers" }); setAppliedFilters({ employee: "All employees", area: "All areas", container: "All containers" }); }}>Clear all filters</button>} />}
+        {transactions.length ? <TransactionTable transactions={transactions} dateFormat={dateFormat} onViewTransaction={onViewTransaction} /> : <EmptyState icon={Search} title="No transactions found" text="Try changing your search or filters to find what you’re looking for." action={<button className="text-link" onClick={() => { setSearch(""); setFilters({ employee: "All employees", area: "All areas", container: "All containers" }); setAppliedFilters({ employee: "All employees", area: "All areas", container: "All containers" }); }}>Clear all filters</button>} />}
       </section>
       <div className="table-footer">Showing {transactions.length} of {totalCount} transactions</div>
     </>
@@ -613,8 +709,13 @@ function DeliveryConfirmationPage({ transaction, dateFormat, currency, onBack, o
 }
 
 // Edits workspace preferences and provides backup and reset actions.
-function SettingsPage({ settings, onSave, onResetData, onExportData }) {
+function SettingsPage({ settings, onSave, onResetData, onExportData, onImportData, notify }) {
   const [form, setForm] = useState(settings);
+  const [showResetConfirmation, setShowResetConfirmation] = useState(false);
+  const [backupToImport, setBackupToImport] = useState(null);
+  const [backupFileName, setBackupFileName] = useState("");
+  const importInput = useRef(null);
+  useEffect(() => setForm(settings), [settings]);
   // Updates one field in the editable settings form.
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   // Saves the form after trimming the required business name.
@@ -622,10 +723,42 @@ function SettingsPage({ settings, onSave, onResetData, onExportData }) {
     event.preventDefault();
     onSave({ ...form, businessName: form.businessName.trim() });
   };
-  // Confirms before asking the app to erase all saved workspace records.
+  // Opens the in-app confirmation before any workspace data can be erased.
   const resetData = () => {
-    const confirmed = window.confirm("Reset all workspace data? This permanently deletes employees, containers, delivery areas, pending deliveries, transaction history, and saved settings.");
-    if (confirmed && onResetData()) setForm({ ...defaultSettings });
+    setShowResetConfirmation(true);
+  };
+  // Resets data only after the user confirms in the dialog.
+  const confirmResetData = () => {
+    if (onResetData()) {
+      setForm({ ...defaultSettings });
+      setShowResetConfirmation(false);
+    }
+  };
+  // Reads and validates the selected backup before asking for import confirmation.
+  const selectBackupFile = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    try {
+      const backup = JSON.parse(await file.text());
+      if (!isWorkspaceBackup(backup)) {
+        notify("The selected file is not a valid workspace backup.");
+        return;
+      }
+      setBackupToImport(backup);
+      setBackupFileName(file.name);
+    } catch (error) {
+      console.error("Unable to read workspace backup.", error);
+      notify("The selected file is not valid JSON.");
+    }
+  };
+  // Imports the validated backup only after the user confirms in the dialog.
+  const confirmImportBackup = () => {
+    if (onImportData(backupToImport)) {
+      setBackupToImport(null);
+      setBackupFileName("");
+    }
   };
 
   return (
@@ -652,7 +785,7 @@ function SettingsPage({ settings, onSave, onResetData, onExportData }) {
         </div>
       </section>
 
-      <section className="panel settings-section">
+      <section className="panel settings-section regional-preferences-section">
         <div className="settings-section-heading">
           <h2>Regional preferences</h2>
           <p>Choose how prices and dates appear throughout the app.</p>
@@ -674,7 +807,7 @@ function SettingsPage({ settings, onSave, onResetData, onExportData }) {
         </div>
       </section>
 
-      <section className="panel settings-section">
+      <section className="panel settings-section inventory-defaults-section">
         <div className="settings-section-heading">
           <h2>Inventory defaults</h2>
           <p>Set the default ownership type for new container records.</p>
@@ -691,9 +824,20 @@ function SettingsPage({ settings, onSave, onResetData, onExportData }) {
       <section className="panel settings-section reset-section">
         <div className="settings-section-heading">
           <h2>Backup workspace data</h2>
-          <p>Download your settings, inventory lists, pending deliveries, and transaction history as a JSON file.</p>
+          <p>Import a backup to replace your current workspace, or download a copy of your settings and records.</p>
         </div>
-        <button type="button" className="button button-secondary" onClick={onExportData}><Download size={16} /> Download backup</button>
+        <div className="backup-actions">
+          <input
+            ref={importInput}
+            className="visually-hidden"
+            type="file"
+            accept=".json,application/json"
+            aria-label="Choose a workspace backup file"
+            onChange={selectBackupFile}
+          />
+          <button type="button" className="button button-secondary" onClick={() => importInput.current?.click()}><Upload size={16} /> Import backup</button>
+          <button type="button" className="button button-secondary" onClick={onExportData}><Download size={16} /> Download backup</button>
+        </div>
       </section>
       <section className="panel settings-section reset-section">
         <div className="settings-section-heading">
@@ -703,12 +847,66 @@ function SettingsPage({ settings, onSave, onResetData, onExportData }) {
         <button type="button" className="button button-danger" onClick={resetData}><Trash2 size={16} /> Reset all data</button>
       </section>
       <div className="settings-actions"><Button type="submit"><Check size={16} /> Save settings</Button></div>
+      {showResetConfirmation && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setShowResetConfirmation(false);
+          }}
+        >
+          <section className="transaction-modal reset-confirmation-modal" role="alertdialog" aria-modal="true" aria-labelledby="reset-dialog-title" aria-describedby="reset-dialog-description">
+            <div className="modal-heading">
+              <div>
+                <div className="eyebrow">DANGER ZONE</div>
+                <h2 id="reset-dialog-title">Reset all workspace data?</h2>
+                <p id="reset-dialog-description">This permanently deletes employees, containers, delivery areas, pending deliveries, transaction history, and saved settings. This action cannot be undone.</p>
+              </div>
+            </div>
+            <div className="modal-actions">
+              <Button type="button" variant="secondary" onClick={() => setShowResetConfirmation(false)}>Cancel</Button>
+              <Button type="button" variant="danger" onClick={confirmResetData}><Trash2 size={16} /> Reset all data</Button>
+            </div>
+          </section>
+        </div>
+      )}
+      {backupToImport && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setBackupToImport(null);
+              setBackupFileName("");
+            }
+          }}
+        >
+          <section className="transaction-modal reset-confirmation-modal" role="alertdialog" aria-modal="true" aria-labelledby="import-dialog-title" aria-describedby="import-dialog-description">
+            <div className="modal-heading">
+              <div>
+                <div className="eyebrow">IMPORT BACKUP</div>
+                <h2 id="import-dialog-title">Replace workspace data?</h2>
+                <p id="import-dialog-description">Import <strong>{backupFileName}</strong>? This replaces all current workspace records and settings. This action cannot be undone.</p>
+              </div>
+            </div>
+            <div className="modal-actions">
+              <Button type="button" variant="secondary" onClick={() => {
+                setBackupToImport(null);
+                setBackupFileName("");
+              }}>Cancel</Button>
+              <Button type="button" variant="primary" onClick={confirmImportBackup}><Upload size={16} /> Import backup</Button>
+            </div>
+          </section>
+        </div>
+      )}
     </form>
   );
 }
 
 // Supports a compact dashboard table and a detailed transaction ledger.
-function TransactionTable({ transactions, compact = false, dateFormat, onComplete }) {
+function TransactionTable({ transactions, compact = false, dateFormat, onComplete, onViewTransaction }) {
+  const transactionLink = (item) => onViewTransaction
+    ? <button type="button" className="table-id transaction-view-link" onClick={() => onViewTransaction(item, Boolean(onComplete))}>{item.id}</button>
+    : <span className="table-id">{item.id}</span>;
+
   return (
     <div className="table-scroll">
       <table className={compact ? "data-table compact-table" : "data-table"}>
@@ -716,13 +914,13 @@ function TransactionTable({ transactions, compact = false, dateFormat, onComplet
         <tbody>
           {transactions.map((item) => {
             if (compact) return <tr key={item.id}>
-              <td><span className="table-id">{item.id}</span></td>
+              <td>{transactionLink(item)}</td>
               <td><span className="person-cell">{item.employee}</span></td>
               <td>{item.area}</td><td>{formatDate(item.date, dateFormat)}</td><td><strong>{item.issued}</strong></td>
               <td><StatusPill kind="green">Delivered</StatusPill></td>
             </tr>;
             return <tr key={item.id}>
-              <td><span className="table-id">{item.id}</span></td><td>{formatDate(item.date, dateFormat)}</td>
+              <td>{transactionLink(item)}</td><td>{formatDate(item.date, dateFormat)}</td>
               <td><span className="person-cell">{item.employee}</span></td>
               <td>{item.container}</td><td>{item.area}</td><td><strong>{item.issued}</strong></td>
               <td>{item.returned}</td>
@@ -737,6 +935,48 @@ function TransactionTable({ transactions, compact = false, dateFormat, onComplet
   );
 }
 
+// Shows the key delivery, container-count, and sales details for one transaction.
+function TransactionSummaryModal({ transaction, pending, currency, dateFormat, onClose }) {
+  const stillOut = Math.max(0, transaction.issued - transaction.returned - transaction.damaged - transaction.lost);
+  const totalAmount = Math.max(0, transaction.issued - transaction.returned) * transaction.unitPrice;
+
+  return (
+    <div className="modal-backdrop" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onClose();
+    }}>
+      <section className="transaction-modal transaction-summary-modal" role="dialog" aria-modal="true" aria-labelledby="transaction-summary-title">
+        <div className="modal-heading">
+          <div>
+            <div className="eyebrow">TRANSACTION SUMMARY</div>
+            <h2 id="transaction-summary-title">{transaction.id}</h2>
+            <p>{formatDate(transaction.date, dateFormat)}</p>
+          </div>
+          <button type="button" className="icon-button" aria-label="Close transaction summary" onClick={onClose}><X size={20} /></button>
+        </div>
+        <div className="transaction-summary-details">
+          <div><span>Employee</span><strong>{transaction.employee}</strong></div>
+          <div><span>Delivery area</span><strong>{transaction.area}</strong></div>
+          <div><span>Container</span><strong>{transaction.container}</strong></div>
+          <div><span>Status</span><StatusPill kind={pending ? "amber" : "green"}>{pending ? "Pending delivery" : "Delivered"}</StatusPill></div>
+          <div><span>Quantity issued</span><strong>{transaction.issued}</strong></div>
+          <div><span>Returned</span><strong>{transaction.returned}</strong></div>
+          <div><span>Damaged</span><strong>{transaction.damaged}</strong></div>
+          <div><span>Lost</span><strong>{transaction.lost}</strong></div>
+          <div><span>Still out</span><strong>{stillOut}</strong></div>
+          <div><span>Unit price</span><strong>{formatMoney(transaction.unitPrice, currency)}</strong></div>
+        </div>
+        <div className="transaction-summary-total">
+          <span>Total sales</span>
+          <strong>{formatMoney(totalAmount, currency)}</strong>
+        </div>
+        <div className="modal-actions">
+          <Button type="button" variant="secondary" onClick={onClose}>Close</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 // Sales are derived from transaction quantities and filtered to the selected period.
 function SalesPage({ transactions, currency, dateFormat }) {
   const [period, setPeriod] = useState("This month");
@@ -744,8 +984,25 @@ function SalesPage({ transactions, currency, dateFormat }) {
     .map((item) => ({ id: `SL-${item.id.replace("TR-", "")}`, transaction: item.id, date: item.date, employee: item.employee, containers: item.issued - item.returned, price: item.unitPrice }))
     .filter((sale) => sale.containers > 0);
   const now = new Date();
-  const rangeStart = period === "This year" ? new Date(now.getFullYear(), 0, 1) : period === "Last month" ? new Date(now.getFullYear(), now.getMonth() - 1, 1) : new Date(now.getFullYear(), now.getMonth(), 1);
-  const rangeEnd = period === "This year" ? new Date(now.getFullYear(), 11, 31) : period === "Last month" ? new Date(now.getFullYear(), now.getMonth(), 0) : new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  let rangeStart;
+  let rangeEnd;
+  if (period === "Today") {
+    rangeStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    rangeEnd = rangeStart;
+  } else if (period === "This week") {
+    const daysSinceMonday = (now.getDay() + 6) % 7;
+    rangeStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday);
+    rangeEnd = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), rangeStart.getDate() + 6);
+  } else if (period === "This year") {
+    rangeStart = new Date(now.getFullYear(), 0, 1);
+    rangeEnd = new Date(now.getFullYear(), 11, 31);
+  } else if (period === "Last month") {
+    rangeStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    rangeEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  } else {
+    rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    rangeEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  }
   const periodSales = sales.filter((sale) => {
     const saleDate = new Date(`${sale.date}T00:00:00`);
     return saleDate >= rangeStart && saleDate <= rangeEnd;
@@ -756,7 +1013,7 @@ function SalesPage({ transactions, currency, dateFormat }) {
   return (
     <>
       <PageHeading eyebrow="REVENUE & PERFORMANCE" title="Sales" description="Sales are recorded automatically when a delivery is confirmed, based on containers issued minus returns." />
-      <div className="sales-toolbar"><label className="filter-select"><CalendarDays size={16} /><select value={period} onChange={(event) => setPeriod(event.target.value)}><option>This month</option><option>Last month</option><option>This year</option></select><ChevronDown size={14} /></label><div className="sales-date-note">{dateLabel}</div></div>
+      <div className="sales-toolbar"><label className="filter-select"><CalendarDays size={16} /><select value={period} onChange={(event) => setPeriod(event.target.value)}><option>Today</option><option>This week</option><option>This month</option><option>Last month</option><option>This year</option></select><ChevronDown size={14} /></label><div className="sales-date-note">{dateLabel}</div></div>
       <section className="metrics-grid sales-metrics">
         <MetricCard label="Total sales" value={formatMoney(periodSalesAmount, currency)} icon={Wallet} tone="purple" />
         <MetricCard label="Containers out" value={totalOut} icon={Package} tone="blue" />
