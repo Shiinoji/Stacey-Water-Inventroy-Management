@@ -1,0 +1,18 @@
+
+
+export const formatMoney = (value, currency = "PHP") =>
+  new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(value);
+
+export function formatDate(value, format = "MMM d, yyyy") {
+  const date = value instanceof Date ? value : new Date(`${value}T00:00:00`);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  if (format === "dd/MM/yyyy") return `${day}/${month}/${year}`;
+  if (format === "yyyy-MM-dd") return `${year}-${month}-${day}`;
+  return date.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+}
