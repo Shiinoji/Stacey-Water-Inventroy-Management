@@ -66,10 +66,6 @@ function App() {
   // Totals are calculated from transactions that still match current master data.
   const totalIssued = activeTransactions.reduce((sum, item) => sum + item.issued, 0);
   const totalReturned = activeTransactions.reduce((sum, item) => sum + item.returned, 0);
-  const totalStillOut = activeTransactions.reduce(
-    (sum, item) => sum + item.issued - item.returned - item.damaged - item.lost,
-    0,
-  );
   const totalSales = activeTransactions.reduce((sum, item) => sum + (item.issued - item.returned) * item.unitPrice, 0);
 
   // Search is immediate; the selected dropdown filters apply on user action.
@@ -279,7 +275,7 @@ function App() {
         </header>
 
         <div className="page-content">
-          {page === "Dashboard" && <DashboardPage transactions={activeTransactions} totalIssued={totalIssued} totalReturned={totalReturned} totalStillOut={totalStillOut} totalSales={totalSales} currency={settings.currency} dateFormat={settings.dateFormat} setPage={setPage} onViewTransaction={openTransactionSummary} />}
+          {page === "Dashboard" && <DashboardPage transactions={activeTransactions} totalIssued={totalIssued} totalReturned={totalReturned} pendingDeliveryCount={pendingTransactions.length} totalSales={totalSales} currency={settings.currency} dateFormat={settings.dateFormat} setPage={setPage} onViewTransaction={openTransactionSummary} />}
           {page === "Transactions" && <TransactionsPage
             transactions={filteredTransactions}
             pendingTransactions={pendingTransactions}
