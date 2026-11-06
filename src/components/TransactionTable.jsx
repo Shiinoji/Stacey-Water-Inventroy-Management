@@ -4,7 +4,7 @@ import { formatDate, formatMoney } from "../utils/formatters.js";
 
 export function TransactionTable({ transactions, compact = false, dateFormat, onComplete, onViewTransaction }) {
   const transactionLink = (item) => onViewTransaction
-    ? <button type="button" className="table-id transaction-view-link" onClick={() => onViewTransaction(item, Boolean(onComplete))}>{item.id}</button>
+    ? <button type="button" className="table-id transaction-view-link" onClick={() => onViewTransaction(item, Boolean(item.isPending || onComplete))}>{item.id}</button>
     : <span className="table-id">{item.id}</span>;
 
   return (
@@ -17,7 +17,7 @@ export function TransactionTable({ transactions, compact = false, dateFormat, on
               <td>{transactionLink(item)}</td>
               <td><span className="person-cell">{item.employee}</span></td>
               <td>{item.area}</td><td>{formatDate(item.date, dateFormat)}</td><td><strong>{item.issued}</strong></td>
-              <td><StatusPill kind="green">Delivered</StatusPill></td>
+              <td><StatusPill kind={item.isPending ? "amber" : "green"}>{item.isPending ? "Pending" : "Delivered"}</StatusPill></td>
             </tr>;
             return <tr key={item.id}>
               <td>{transactionLink(item)}</td><td>{formatDate(item.date, dateFormat)}</td>

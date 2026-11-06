@@ -63,6 +63,14 @@ function App() {
     ));
   }, [transactions, employees, areas, containers]);
 
+  const recentTransactions = useMemo(() => [
+    ...pendingTransactions.map((transaction) => ({ ...transaction, isPending: true })),
+    ...activeTransactions,
+  ].sort((first, second) => (
+    second.date.localeCompare(first.date) ||
+    Number(Boolean(second.isPending)) - Number(Boolean(first.isPending))
+  )), [pendingTransactions, activeTransactions]);
+
   // Totals are calculated from transactions that still match current master data.
   const totalIssued = activeTransactions.reduce((sum, item) => sum + item.issued, 0);
   const totalReturned = activeTransactions.reduce((sum, item) => sum + item.returned, 0);
@@ -275,7 +283,7 @@ function App() {
         </header>
 
         <div className="page-content">
-          {page === "Dashboard" && <DashboardPage transactions={activeTransactions} totalIssued={totalIssued} totalReturned={totalReturned} pendingDeliveryCount={pendingTransactions.length} totalSales={totalSales} currency={settings.currency} dateFormat={settings.dateFormat} setPage={setPage} onViewTransaction={openTransactionSummary} />}
+          {page === "Dashboard" && <DashboardPage transactions={recentTransactions} totalIssued={totalIssued} totalReturned={totalReturned} pendingDeliveryCount={pendingTransactions.length} totalSales={totalSales} currency={settings.currency} dateFormat={settings.dateFormat} setPage={setPage} onViewTransaction={openTransactionSummary} />}
           {page === "Transactions" && <TransactionsPage
             transactions={filteredTransactions}
             pendingTransactions={pendingTransactions}
