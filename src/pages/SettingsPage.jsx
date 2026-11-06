@@ -60,14 +60,14 @@ export function SettingsPage({ settings, defaultSettings, isWorkspaceBackup, onS
       <section className="panel settings-section">
         <div className="settings-section-heading">
           <h2>Business profile</h2>
-          <p>These details identify your Stacey Water workspace.</p>
+          <p>Set up your business information and contact details.</p>
         </div>
         <div className="settings-grid">
           <label>Business name
             <input value={form.businessName} onChange={(event) => update("businessName", event.target.value)} required />
           </label>
           <label>Contact email
-            <input type="email" value={form.email} onChange={(event) => update("email", event.target.value)} placeholder="name@example.com" />
+            <input type="email" value={form.email} onChange={(event) => update("email", event.target.value)} placeholder="Business Email" />
           </label>
           <label>Phone number
             <input type="tel" value={form.phone} onChange={(event) => update("phone", event.target.value)} placeholder="+63 9XX XXX XXXX" />
@@ -150,7 +150,7 @@ export function SettingsPage({ settings, defaultSettings, isWorkspaceBackup, onS
           <section className="transaction-modal reset-confirmation-modal" role="alertdialog" aria-modal="true" aria-labelledby="reset-dialog-title" aria-describedby="reset-dialog-description">
             <div className="modal-heading">
               <div>
-                <div className="eyebrow">DANGER ZONE</div>
+                <div className="eyebrow">WARNING</div>
                 <h2 id="reset-dialog-title">Reset all workspace data?</h2>
                 <p id="reset-dialog-description">This permanently deletes employees, containers, delivery areas, pending deliveries, transaction history, and saved settings. This action cannot be undone.</p>
               </div>
@@ -193,5 +193,3 @@ export function SettingsPage({ settings, defaultSettings, isWorkspaceBackup, onS
     </form>
   );
 }
-
-// Supports a compact dashboard table and a detailed transaction ledger.
