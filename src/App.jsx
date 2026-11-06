@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownRight, Check, ChevronRight, LayoutDashboard, Menu, Settings, Settings2, Wallet, X } from "lucide-react";
+import { ArrowDownRight, Check, ChevronRight, Info, LayoutDashboard, Menu, Settings, Settings2, Wallet, X } from "lucide-react";
 import { Logo } from "./components/Common.jsx";
 import { TransactionSummaryModal } from "./components/TransactionTable.jsx";
 import { TransactionModal } from "./components/TransactionModal.jsx";
@@ -9,6 +9,7 @@ import { DeliveryConfirmationPage } from "./pages/DeliveryConfirmationPage.jsx";
 import { SettingsPage } from "./pages/SettingsPage.jsx";
 import { SalesPage } from "./pages/SalesPage.jsx";
 import { MasterDataPage } from "./pages/MasterDataPage.jsx";
+import { AboutPage } from "./pages/AboutPage.jsx";
 import { localInputDate, relativeDate } from "./utils/dates.js";
 import { defaultSettings, initialAreas, initialContainers, initialEmployees, initialTransactions, isWorkspaceBackup, loadMasterData, loadSettings } from "./data/workspace.js";
 
@@ -267,9 +268,14 @@ function App() {
         <button onClick={() => { setPage("Master data"); setMasterSection("Employees"); setSidebarOpen(false); }} className={`nav-link ${page === "Master data" ? "nav-active" : ""}`}>
           <Settings2 size={18} strokeWidth={1.8} /><span>Master data</span>
         </button>
-        <button onClick={() => handleNav("Settings")} className={`nav-link ${page === "Settings" ? "nav-active" : ""}`}>
-          <Settings size={18} strokeWidth={1.8} /><span>Settings</span>
-        </button>
+        <div className="sidebar-bottom">
+          <button onClick={() => handleNav("Settings")} className={`nav-link ${page === "Settings" ? "nav-active" : ""}`}>
+            <Settings size={18} strokeWidth={1.8} /><span>Settings</span>
+          </button>
+          <button onClick={() => handleNav("About")} className={`nav-link ${page === "About" ? "nav-active" : ""}`}>
+            <Info size={18} strokeWidth={1.8} /><span>About</span>
+          </button>
+        </div>
       </aside>
 
       {sidebarOpen && <button className="sidebar-scrim" onClick={() => setSidebarOpen(false)} aria-label="Close navigation" />}
@@ -303,6 +309,7 @@ function App() {
             dateFormat={settings.dateFormat}
           />}
           {page === "Sales" && <SalesPage transactions={activeTransactions} currency={settings.currency} dateFormat={settings.dateFormat} />}
+          {page === "About" && <AboutPage businessName={settings.businessName} />}
           {page === "Delivery confirmation" && deliveryForConfirmation && <DeliveryConfirmationPage
             transaction={deliveryForConfirmation}
             dateFormat={settings.dateFormat}
