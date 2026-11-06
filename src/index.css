@@ -1135,6 +1135,14 @@ h1 {
   flex: 0 0 34px;
   color: #a45b54;
 }
+.edit-button {
+  flex: 0 0 34px;
+  color: #4a748b;
+}
+.edit-button:hover {
+  color: #285d78;
+  background: #eaf3f8;
+}
 .delete-button:hover {
   color: #a33f35;
   background: #faeeec;
@@ -1248,6 +1256,12 @@ h1 {
 }
 .reset-confirmation-modal {
   width: min(100%, 460px);
+}
+.master-edit-modal {
+  width: min(100%, 560px);
+}
+.master-edit-fields {
+  margin-bottom: 20px;
 }
 .reset-confirmation-modal .modal-heading {
   margin-bottom: 0;

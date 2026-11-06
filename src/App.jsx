@@ -53,16 +53,8 @@ function App() {
 
   useEffect(() => () => window.clearTimeout(toastTimeout.current), []);
 
-  const activeTransactions = useMemo(() => {
-    const employeeNames = new Set(employees.map((employee) => `${employee.first} ${employee.last}`));
-    const areaNames = new Set(areas.map((area) => area.name));
-    const containerTypes = new Set(containers.map((container) => container.type));
-    return transactions.filter((item) => (
-      employeeNames.has(item.employee) &&
-      areaNames.has(item.area) &&
-      containerTypes.has(item.container)
-    ));
-  }, [transactions, employees, areas, containers]);
+  // Transactions retain their original details and remain reportable after master data changes.
+  const activeTransactions = transactions;
 
   const recentTransactions = useMemo(() => [
     ...pendingTransactions.map((transaction) => ({ ...transaction, isPending: true })),
@@ -72,7 +64,7 @@ function App() {
     Number(Boolean(second.isPending)) - Number(Boolean(first.isPending))
   )), [pendingTransactions, activeTransactions]);
 
-  // Totals are calculated from transactions that still match current master data.
+  // Totals use transaction snapshots so deleting master data never hides history.
   const totalIssued = activeTransactions.reduce((sum, item) => sum + item.issued, 0);
   const totalReturned = activeTransactions.reduce((sum, item) => sum + item.returned, 0);
   const totalSales = activeTransactions.reduce((sum, item) => sum + (item.issued - item.returned) * item.unitPrice, 0);

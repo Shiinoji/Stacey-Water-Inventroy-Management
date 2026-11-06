@@ -5,18 +5,19 @@ import { localInputDate } from "../utils/dates.js";
 import { formatMoney } from "../utils/formatters.js";
 
 export function TransactionModal({ employees, containers, areas, currency, onClose, onSave }) {
+  const activeContainers = containers.filter((container) => container.status === "Active");
   const [form, setForm] = useState({
     date: localInputDate(),
     employee: employees[0] ? `${employees[0].first} ${employees[0].last}` : "",
     area: areas[0]?.name || "",
-    containerId: containers[0] ? String(containers[0].id) : "",
+    containerId: activeContainers[0] ? String(activeContainers[0].id) : "",
     issued: 1,
   });
   const [returnLater, setReturnLater] = useState(false);
   const [returnError, setReturnError] = useState("");
   const selectedArea = areas.find((area) => area.name === form.area);
   // Container types can repeat with different ownership and prices, so select by record ID.
-  const selectedContainer = containers.find((item) => String(item.id) === form.containerId);
+  const selectedContainer = activeContainers.find((item) => String(item.id) === form.containerId);
   // Updates a transaction field while preserving the other form values.
   const updateForm = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
@@ -53,7 +54,7 @@ export function TransactionModal({ employees, containers, areas, currency, onClo
             <label>Transaction date<input type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} required /></label>
             <label>Employee<select value={form.employee} onChange={(event) => updateForm("employee", event.target.value)} required><option value="" disabled>Select an employee</option>{employees.map((employee) => <option key={employee.id}>{employee.first} {employee.last}</option>)}</select></label>
             <label>Delivery area<select value={form.area} onChange={(event) => updateForm("area", event.target.value)} required><option value="" disabled>Select a delivery area</option>{areas.map((area) => <option key={area.id}>{area.name}</option>)}</select><small>{selectedArea ? `${selectedArea.barangay} · ${selectedArea.employee}` : "Choose a delivery area"}</small></label>
-            <label>Container<select value={form.containerId} onChange={(event) => updateForm("containerId", event.target.value)} required><option value="" disabled>Select a container</option>{containers.map((item) => <option key={item.id} value={item.id}>{item.type} · {item.ownership}</option>)}</select><small>{selectedContainer ? `${selectedContainer.ownership} · ${formatMoney(selectedContainer.price, currency)} per unit` : "Choose a container"}</small></label>
+            <label>Container<select value={form.containerId} onChange={(event) => updateForm("containerId", event.target.value)} required><option value="" disabled>Select a container</option>{activeContainers.map((item) => <option key={item.id} value={item.id}>{item.type} · {item.ownership}</option>)}</select><small>{selectedContainer ? `${selectedContainer.ownership} · ${formatMoney(selectedContainer.price, currency)} per unit` : activeContainers.length ? "Choose a container" : "No active containers. Add or activate one in Master data."}</small></label>
             <label className="issued-field">Quantity issued<input type="number" min="1" value={form.issued} onChange={(event) => { updateForm("issued", event.target.value); setReturnError(""); }} required /></label>
           </div>
           <label className="return-toggle"><input type="checkbox" checked={returnLater} onChange={(event) => setReturnLater(event.target.checked)} /><span className="toggle-track" /><span><strong>Record a return now</strong><small>Skip this if containers are still out for delivery.</small></span></label>

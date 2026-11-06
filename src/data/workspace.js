@@ -2,9 +2,9 @@ import { relativeDate } from "../utils/dates.js";
 
 // These in-memory records seed the demo workspace when the app first loads.
 export const initialEmployees = [
-  { id: 1, first: "Marco", last: "Reyes", phone: "0917 555 0182" },
-  { id: 2, first: "Ana", last: "Santos", phone: "0918 240 7721" },
-  { id: 3, first: "Rafael", last: "Cruz", phone: "0920 318 6640" },
+  { id: 1, first: "Marco", last: "Reyes", phone: "0917 555 0182", team: "Delivery team" },
+  { id: 2, first: "Ana", last: "Santos", phone: "0918 240 7721", team: "Delivery team" },
+  { id: 3, first: "Rafael", last: "Cruz", phone: "0920 318 6640", team: "Delivery team" },
 ];
 
 export const initialContainers = [
@@ -56,7 +56,8 @@ export function isWorkspaceBackup(value) {
     )) &&
     item.businessName.trim().length > 0;
   const hasValidEmployees = (items) => Array.isArray(items) && items.every((item) =>
-    isObject(item) && isNumber(item.id) && isText(item.first) && isText(item.last) && isText(item.phone)
+    isObject(item) && isNumber(item.id) && isText(item.first) && isText(item.last) && isText(item.phone) &&
+    (!("team" in item) || ["Delivery team", "Refilling team"].includes(item.team))
   );
   const hasValidContainers = (items) => Array.isArray(items) && items.every((item) =>
     isObject(item) && isNumber(item.id) && isText(item.type) &&
@@ -71,10 +72,10 @@ export function isWorkspaceBackup(value) {
     isObject(item) && isText(item.id) && isText(item.date) &&
     !Number.isNaN(new Date(`${item.date}T00:00:00`).getTime()) &&
     isText(item.employee) && isText(item.container) && isText(item.area) &&
-    isNumber(item.issued) && item.issued >= 1 &&
-    isNumber(item.returned) && item.returned >= 0 &&
-    isNumber(item.damaged) && item.damaged >= 0 &&
-    isNumber(item.lost) && item.lost >= 0 &&
+    Number.isInteger(item.issued) && item.issued >= 1 &&
+    Number.isInteger(item.returned) && item.returned >= 0 &&
+    Number.isInteger(item.damaged) && item.damaged >= 0 &&
+    Number.isInteger(item.lost) && item.lost >= 0 &&
     item.returned + item.damaged + item.lost <= item.issued &&
     isNumber(item.unitPrice) && item.unitPrice >= 0
   );
