@@ -53,6 +53,20 @@ function App() {
 
   useEffect(() => () => window.clearTimeout(toastTimeout.current), []);
 
+  useEffect(() => {
+    if (!showTransaction && !selectedTransaction) return undefined;
+
+    const bodyOverflow = document.body.style.overflow;
+    const documentOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = bodyOverflow;
+      document.documentElement.style.overflow = documentOverflow;
+    };
+  }, [showTransaction, selectedTransaction]);
+
   // Transactions retain their original details and remain reportable after master data changes.
   const activeTransactions = transactions;
 
