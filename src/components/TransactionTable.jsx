@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
 import { Button, StatusPill } from "./Common.jsx";
-import { formatDate, formatMoney } from "../utils/formatters.js";
+import { formatDate, formatMoney, formatTime } from "../utils/formatters.js";
 
 export function TransactionTable({ transactions, compact = false, dateFormat, onComplete, onViewTransaction }) {
   const transactionLink = (item) => onViewTransaction
@@ -50,7 +50,7 @@ export function TransactionSummaryModal({ transaction, pending, currency, dateFo
           <div>
             <div className="eyebrow">TRANSACTION SUMMARY</div>
             <h2 id="transaction-summary-title">{transaction.id}</h2>
-            <p>{formatDate(transaction.date, dateFormat)}</p>
+            <p>{formatDate(transaction.date, dateFormat)} · {formatTime(transaction.time)}</p>
           </div>
           <button type="button" className="icon-button" aria-label="Close transaction summary" onClick={onClose}><X size={20} /></button>
         </div>
@@ -58,7 +58,7 @@ export function TransactionSummaryModal({ transaction, pending, currency, dateFo
           <div><span>Employee</span><strong>{transaction.employee}</strong></div>
           <div><span>Delivery area</span><strong>{transaction.area}</strong></div>
           <div><span>Container</span><strong>{transaction.container}</strong></div>
-          <div><span>Status</span><StatusPill kind={pending ? "amber" : "green"}>{pending ? "Pending delivery" : "Delivered"}</StatusPill></div>
+          <div className="transaction-summary-status"><span>Status</span><StatusPill kind={pending ? "amber" : "green"}>{pending ? "Pending delivery" : "Delivered"}</StatusPill></div>
           <div><span>Quantity issued</span><strong>{transaction.issued}</strong></div>
           <div><span>Returned</span><strong>{transaction.returned}</strong></div>
           <div><span>Damaged</span><strong>{transaction.damaged}</strong></div>

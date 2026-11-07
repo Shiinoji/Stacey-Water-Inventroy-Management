@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { Check, Package, X } from "lucide-react";
 import { Button } from "./Common.jsx";
-import { localInputDate } from "../utils/dates.js";
+import { localInputDate, localInputTime } from "../utils/dates.js";
 import { formatMoney } from "../utils/formatters.js";
 
 export function TransactionModal({ employees, containers, areas, currency, onClose, onSave }) {
   const activeContainers = containers.filter((container) => container.status === "Active");
   const [form, setForm] = useState({
     date: localInputDate(),
+    time: localInputTime(),
     employee: employees[0] ? `${employees[0].first} ${employees[0].last}` : "",
     area: areas[0]?.name || "",
     containerId: activeContainers[0] ? String(activeContainers[0].id) : "",
@@ -34,6 +35,7 @@ export function TransactionModal({ employees, containers, areas, currency, onClo
     }
     onSave({
       date: form.date,
+      time: form.time,
       employee: form.employee,
       area: form.area,
       container: selectedContainer.type,
@@ -52,6 +54,7 @@ export function TransactionModal({ employees, containers, areas, currency, onClo
         <form onSubmit={submit}>
           <div className="transaction-form-grid">
             <label>Transaction date<input type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} required /></label>
+            <label>Transaction time<input type="time" value={form.time} onChange={(event) => updateForm("time", event.target.value)} required /></label>
             <label>Employee<select value={form.employee} onChange={(event) => updateForm("employee", event.target.value)} required><option value="" disabled>Select an employee</option>{employees.map((employee) => <option key={employee.id}>{employee.first} {employee.last}</option>)}</select></label>
             <label>Delivery area<select value={form.area} onChange={(event) => updateForm("area", event.target.value)} required><option value="" disabled>Select a delivery area</option>{areas.map((area) => <option key={area.id}>{area.name}</option>)}</select><small>{selectedArea ? `${selectedArea.barangay} · ${selectedArea.employee}` : "Choose a delivery area"}</small></label>
             <label>Container<select value={form.containerId} onChange={(event) => updateForm("containerId", event.target.value)} required><option value="" disabled>Select a container</option>{activeContainers.map((item) => <option key={item.id} value={item.id}>{item.type} · {item.ownership}</option>)}</select><small>{selectedContainer ? `${selectedContainer.ownership} · ${formatMoney(selectedContainer.price, currency)} per unit` : activeContainers.length ? "Choose a container" : "No active containers. Add or activate one in Master data."}</small></label>

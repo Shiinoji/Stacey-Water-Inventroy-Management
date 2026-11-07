@@ -554,6 +554,11 @@ h1 {
   font-size: 9px;
   font-weight: 600;
 }
+.data-table .status-pill {
+  padding-right: 0;
+  padding-left: 0;
+  background: transparent;
+}
 .status-green {
   color: #477692;
   background: #e9f0f4;
@@ -1282,6 +1287,11 @@ h1 {
   display: grid;
   gap: 4px;
 }
+.transaction-summary-details .status-pill {
+  justify-self: start;
+  padding: 0;
+  background: transparent;
+}
 .transaction-summary-details > div > span:first-child {
   color: #848b8f;
   font-size: 12px;
@@ -1340,7 +1350,7 @@ h1 {
   font-weight: 400;
 }
 .issued-field {
-  max-width: calc(50% - 7px);
+  max-width: none;
 }
 .return-toggle {
   display: flex;

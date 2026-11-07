@@ -71,6 +71,7 @@ export function isWorkspaceBackup(value) {
   const hasValidTransactions = (items) => Array.isArray(items) && items.every((item) =>
     isObject(item) && isText(item.id) && isText(item.date) &&
     !Number.isNaN(new Date(`${item.date}T00:00:00`).getTime()) &&
+    (!("time" in item) || (isText(item.time) && /^([01]\d|2[0-3]):[0-5]\d$/.test(item.time))) &&
     isText(item.employee) && isText(item.container) && isText(item.area) &&
     Number.isInteger(item.issued) && item.issued >= 1 &&
     Number.isInteger(item.returned) && item.returned >= 0 &&

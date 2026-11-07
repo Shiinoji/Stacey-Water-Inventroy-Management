@@ -16,3 +16,13 @@ export function formatDate(value, format = "MMM d, yyyy") {
   if (format === "yyyy-MM-dd") return `${year}-${month}-${day}`;
   return date.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
 }
+
+export function formatTime(value) {
+  if (!value) return "Not recorded";
+  const [hours, minutes] = value.split(":").map(Number);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return "Not recorded";
+  return new Date(2000, 0, 1, hours, minutes).toLocaleTimeString("en-PH", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
