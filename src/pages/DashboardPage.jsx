@@ -26,4 +26,3 @@ export function DashboardPage({ transactions, totalIssued, totalReturned, pendin
   );
 }
 
-// Provides transaction search, staged filters, and an empty state when nothing matches.
